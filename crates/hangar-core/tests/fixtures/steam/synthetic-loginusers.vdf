@@ -1,0 +1,25 @@
+"users"
+{
+	"76561190000000000"
+	{
+		"AccountName"		"MASKED"
+		"PersonaName"		"MASKED"
+		"RememberPassword"		"1"
+		"WantsOfflineMode"		"0"
+		"SkipOfflineModeWarning"		"0"
+		"AllowAutoLogin"		"1"
+		"MostRecent"		"0"
+		"Timestamp"		"1725000000"
+	}
+	"76561190000000001"
+	{
+		"AccountName"		"MASKED"
+		"PersonaName"		"MASKED"
+		"RememberPassword"		"1"
+		"WantsOfflineMode"		"0"
+		"SkipOfflineModeWarning"		"0"
+		"AllowAutoLogin"		"1"
+		"MostRecent"		"1"
+		"Timestamp"		"1730000000"
+	}
+}

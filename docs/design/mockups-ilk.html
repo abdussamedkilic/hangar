@@ -1,0 +1,369 @@
+<title>Hangar Arayüz Yönleri</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;600;800&family=Manrope:wght@400;500;700&family=Archivo:wdth,wght@62..125,400..900&family=IBM+Plex+Mono:wght@400;500&family=Chakra+Petch:wght@500;600;700&family=Figtree:wght@400;500;600&family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=DM+Sans:wght@400;500;700&display=swap">
+<style>
+/* Kabuk: üstte yön seçici, altta seçili yönün tam ekran mockup'ı. Her yön kendi görsel dünyasına bağlı (bilinçli tek tema). */
+:root{
+  --shell-bg:#0d0f12; --shell-fg:#e8eaee; --shell-dim:#8a9099; --shell-line:#262a31; --shell-accent:#ffffff;
+  --f-shell:"Manrope",system-ui,sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{background:var(--shell-bg);color:var(--shell-fg);font-family:var(--f-shell);overflow-x:hidden}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid currentColor;outline-offset:2px}
+
+.shell{position:sticky;top:env(safe-area-inset-top,0px);z-index:50;background:var(--shell-bg);border-bottom:1px solid var(--shell-line);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:10px;
+  display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:60;background:var(--shell-bg)}
+.shell b{font-weight:700;letter-spacing:.02em}
+.tabs{display:flex;gap:4px;flex-wrap:wrap}
+.tab{padding:7px 12px;border-radius:999px;color:var(--shell-dim);font-size:13px;font-weight:500;display:flex;gap:8px;align-items:baseline}
+.tab span{font-variant-numeric:tabular-nums;opacity:.6;font-size:12px}
+.tab[aria-selected="true"]{background:var(--shell-fg);color:var(--shell-bg)}
+.tab-note{color:var(--shell-dim);font-size:13px;flex:1 1 260px;min-width:0}
+.stage{min-height:calc(100% - 56px)}
+
+/* ortak bileşen davranışları */
+.cover{position:relative;overflow:hidden;aspect-ratio:3/4;max-width:100%;display:flex;align-items:flex-end}
+.cover .ct{position:relative;z-index:1}
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:80;
+  background:#111;color:#fff;padding:12px 18px;border-radius:10px;font:500 14px var(--f-shell);box-shadow:0 10px 40px rgba(0,0,0,.4);max-width:calc(100% - 32px)}
+.play{position:relative;display:inline-flex}
+.play-menu{position:absolute;top:calc(100% + 6px);left:0;min-width:100%;z-index:20;display:flex;flex-direction:column}
+.play-menu button{text-align:left;white-space:nowrap}
+
+/* ================= 1 · VİTRİN ================= */
+.v1{--bg:#07090d;--fg:#f3f1ec;--dim:#9aa0aa;--line:rgba(255,255,255,.1);--glass:rgba(12,14,19,.55);
+  --f-disp:"Unbounded",sans-serif;--f-body:"Manrope",sans-serif;
+  background:var(--bg);color:var(--fg);font-family:var(--f-body);min-height:100%}
+.v1 .nav{display:flex;align-items:center;gap:24px;padding:18px max(16px,env(safe-area-inset-right,0px)) 18px max(16px,env(safe-area-inset-left,0px));position:relative;z-index:2;flex-wrap:wrap}
+.v1 .logo{font:800 18px var(--f-disp);letter-spacing:.04em}
+.v1 .nav a{color:var(--dim);text-decoration:none;font-size:14px;font-weight:500}
+.v1 .nav a.on{color:var(--fg)}
+.v1 .nav .sp{flex:1}
+.v1 .search{background:var(--glass);border:1px solid var(--line);border-radius:999px;padding:9px 16px;color:var(--fg);width:min(240px,100%);font:inherit;font-size:14px}
+.v1 .hero{position:relative;margin-top:-64px;padding:120px max(16px,env(safe-area-inset-right,0px)) 40px max(24px,env(safe-area-inset-left,0px));min-height:440px;display:flex;align-items:flex-end;overflow:hidden}
+.v1 .backdrop{position:absolute;inset:-40px;filter:blur(40px) saturate(1.2);opacity:.85;transform:scale(1.1)}
+.v1 .hero::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(7,9,13,.2),var(--bg) 92%),linear-gradient(90deg,rgba(7,9,13,.75),transparent 70%)}
+.v1 .hero-in{position:relative;z-index:1;max-width:620px;display:flex;flex-direction:column;gap:16px}
+.v1 .eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+.v1 h1{font:600 clamp(32px,6vw,64px)/1 var(--f-disp);margin:0;text-wrap:balance;letter-spacing:-.01em}
+.v1 .meta{display:flex;gap:18px;flex-wrap:wrap;color:var(--dim);font-size:14px;font-variant-numeric:tabular-nums}
+.v1 .meta b{color:var(--fg);font-weight:700}
+.v1 .play-main{background:var(--fg);color:var(--bg);padding:14px 26px;border-radius:999px 0 0 999px;font-weight:700;font-size:15px}
+.v1 .play-alt{background:var(--fg);color:var(--bg);padding:14px 16px;border-radius:0 999px 999px 0;border-left:1px solid rgba(0,0,0,.15)}
+.v1 .play-menu{background:#141821;border:1px solid var(--line);border-radius:14px;padding:6px}
+.v1 .play-menu button{padding:10px 12px;border-radius:9px;font-size:14px}
+.v1 .play-menu button:hover{background:rgba(255,255,255,.07)}
+.v1 .row{padding:8px max(16px,env(safe-area-inset-right,0px)) 32px max(24px,env(safe-area-inset-left,0px))}
+.v1 .row h2{font:600 15px var(--f-disp);margin:0 0 14px;letter-spacing:.02em}
+.v1 .shelf{display:flex;gap:16px;overflow-x:auto;padding-bottom:12px;scroll-snap-type:x proximity;scrollbar-width:thin}
+.v1 .shelf .card{flex:0 0 168px;scroll-snap-align:start}
+.v1 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:16px}
+.v1 .card{text-align:left;display:flex;flex-direction:column;gap:8px}
+.v1 .card .cover{border-radius:12px;transition:transform .3s,box-shadow .3s}
+.v1 .card:hover .cover{transform:translateY(-4px);box-shadow:0 18px 40px rgba(0,0,0,.5)}
+.v1 .card.sel .cover{box-shadow:0 0 0 2px var(--fg)}
+.v1 .card .cn{font-size:13px;font-weight:500}
+.v1 .card .cp{font-size:12px;color:var(--dim)}
+.v1 .ct{font:600 15px/1.1 var(--f-disp);padding:14px;text-wrap:balance}
+.v1 .notinst .cover{filter:grayscale(.7) brightness(.7)}
+
+/* ================= 2 · ARŞİV ================= */
+.v2{--bg:#eceef1;--fg:#0e1014;--dim:#5d636d;--line:#c9cdd4;--accent:#2a3cff;--paper:#f7f8fa;
+  --f-disp:"Archivo",sans-serif;--f-mono:"IBM Plex Mono",monospace;
+  background:var(--bg);color:var(--fg);font-family:var(--f-mono);min-height:100%;color-scheme:light;
+  padding:28px max(16px,env(safe-area-inset-right,0px)) 60px max(16px,env(safe-area-inset-left,0px))}
+.v2 .top{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;font-size:12px;text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid var(--fg);padding-bottom:10px}
+.v2 h1{font-family:var(--f-disp);font-stretch:62%;font-weight:900;font-size:clamp(64px,15vw,184px);line-height:.85;margin:22px 0 6px;letter-spacing:-.02em;text-transform:uppercase}
+.v2 .stats{display:flex;gap:28px;flex-wrap:wrap;font-size:13px;color:var(--dim);margin-bottom:28px;font-variant-numeric:tabular-nums}
+.v2 .stats b{color:var(--fg);font-weight:500}
+.v2 .filters{display:flex;gap:6px 20px;flex-wrap:wrap;font-size:13px;margin-bottom:14px;align-items:center}
+.v2 .filters button{padding:2px 0;border-bottom:1px solid transparent;color:var(--dim)}
+.v2 .filters button.on{color:var(--fg);border-color:var(--fg)}
+.v2 .filters input{margin-left:auto;background:transparent;border:0;border-bottom:1px solid var(--fg);padding:4px 0;font:inherit;width:min(220px,100%)}
+.v2 .list{border-top:1px solid var(--fg)}
+.v2 .rowx{display:grid;grid-template-columns:44px minmax(0,1fr) 150px 90px 110px 70px;gap:12px;align-items:baseline;padding:12px 0;border-bottom:1px solid var(--line);width:100%;text-align:left;font-size:13px;font-variant-numeric:tabular-nums}
+.v2 .rowx .t{font-family:var(--f-disp);font-stretch:80%;font-weight:700;font-size:clamp(20px,3vw,30px);line-height:1;text-transform:uppercase;transition:transform .25s,color .2s}
+.v2 .rowx:hover .t{color:var(--accent);transform:translateX(6px)}
+.v2 .rowx .n{color:var(--dim)}
+.v2 .rowx .off{color:var(--dim)}
+.v2 .head{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);padding:8px 0}
+.v2 .head .t{font:inherit;font-size:11px}
+.v2 .detail{display:grid;grid-template-columns:200px minmax(0,1fr);gap:28px;padding:22px 0 26px 56px;border-bottom:1px solid var(--fg);background:linear-gradient(var(--paper),var(--paper))}
+.v2 .detail .cover{border:1px solid var(--fg)}
+.v2 .detail dl{display:grid;grid-template-columns:max-content 1fr;gap:6px 18px;font-size:13px;margin:0 0 18px}
+.v2 .detail dt{color:var(--dim);text-transform:uppercase;font-size:11px;letter-spacing:.08em;padding-top:2px}
+.v2 .detail dd{margin:0}
+.v2 .ptab{border-collapse:collapse;font-size:12px;margin-bottom:20px;width:100%;max-width:440px}
+.v2 .ptab td,.v2 .ptab th{border-top:1px solid var(--line);padding:6px 8px 6px 0;text-align:left;font-weight:400}
+.v2 .ptab th{color:var(--dim);font-size:11px;text-transform:uppercase}
+.v2 .play-main{background:var(--fg);color:var(--bg);padding:12px 22px;font-size:13px;text-transform:uppercase;letter-spacing:.06em}
+.v2 .play-alt{background:var(--accent);color:#fff;padding:12px 14px}
+.v2 .play-menu{background:var(--paper);border:1px solid var(--fg)}
+.v2 .play-menu button{padding:9px 12px;font-size:12px;border-bottom:1px solid var(--line)}
+.v2 .play-menu button:hover{background:var(--accent);color:#fff}
+.v2 .ct{font-family:var(--f-disp);font-stretch:62%;font-weight:900;font-size:26px;line-height:.9;text-transform:uppercase;padding:12px;color:#fff}
+.v2 .hover-cover{position:fixed;width:150px;pointer-events:none;z-index:40;opacity:0;border:1px solid var(--fg)}
+@media (max-width:760px){.v2 .rowx{grid-template-columns:32px minmax(0,1fr) 70px}.v2 .rowx>:nth-child(n+4){display:none}.v2 .detail{grid-template-columns:1fr;padding-left:0}.v2 .detail .cover{width:160px}.v2 .hover-cover{display:none}}
+
+/* ================= 3 · KOKPİT ================= */
+.v3{--bg:#11151b;--panel:#171c24;--raise:#1e2530;--fg:#e6e9ee;--dim:#8892a0;--line:#262e3a;--accent:#f2a93b;
+  --f-disp:"Chakra Petch",sans-serif;--f-body:"Figtree",sans-serif;
+  background:var(--bg);color:var(--fg);font-family:var(--f-body);min-height:100%;
+  display:grid;grid-template-columns:220px minmax(0,1fr) 320px}
+.v3 aside{border-right:1px solid var(--line);padding:18px 12px 18px max(12px,env(safe-area-inset-left,0px));display:flex;flex-direction:column;gap:22px;font-size:14px}
+.v3 .logo{font:700 18px var(--f-disp);letter-spacing:.08em;text-transform:uppercase;padding:0 8px;display:flex;gap:8px;align-items:center}
+.v3 .logo i{width:10px;height:10px;background:var(--accent);display:inline-block;clip-path:polygon(0 0,100% 50%,0 100%)}
+.v3 .grp{display:flex;flex-direction:column;gap:2px}
+.v3 .grp h4{font:600 11px var(--f-disp);letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin:0 0 6px 8px}
+.v3 .grp button{display:flex;justify-content:space-between;padding:7px 8px;border-radius:6px;color:var(--dim);text-align:left}
+.v3 .grp button span{font-variant-numeric:tabular-nums;font-size:12px}
+.v3 .grp button.on{background:var(--raise);color:var(--fg)}
+.v3 .grp button:hover{color:var(--fg)}
+.v3 main{padding:18px 18px 40px;min-width:0}
+.v3 .bar{display:flex;gap:10px;align-items:center;margin-bottom:18px;flex-wrap:wrap}
+.v3 .bar .s{flex:1 1 220px;display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 12px;color:var(--dim);font-size:14px}
+.v3 .bar .s input{background:none;border:0;color:var(--fg);font:inherit;flex:1;min-width:0}
+.v3 kbd{font:500 11px var(--f-disp);border:1px solid var(--line);border-radius:4px;padding:1px 6px;color:var(--dim)}
+.v3 .bar .sort{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:13px;color:var(--dim)}
+.v3 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:12px}
+.v3 .card{text-align:left;display:flex;flex-direction:column;gap:6px;position:relative}
+.v3 .card .cover{border-radius:6px;outline:1px solid var(--line);transition:outline-color .15s}
+.v3 .card:hover .cover{outline-color:var(--dim)}
+.v3 .card.sel .cover{outline:2px solid var(--accent)}
+.v3 .card .cn{font-size:12.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.v3 .badges{position:absolute;top:6px;left:6px;right:6px;z-index:2;display:flex;justify-content:space-between}
+.v3 .pg{display:flex;gap:3px}
+.v3 .pg b{font:700 9px var(--f-disp);background:rgba(10,12,16,.75);padding:2px 4px;border-radius:3px;letter-spacing:.04em}
+.v3 .dot{width:8px;height:8px;border-radius:50%;background:#4fd18b;box-shadow:0 0 0 2px rgba(10,12,16,.75)}
+.v3 .notinst .dot{background:transparent;border:1.5px solid var(--dim)}
+.v3 .notinst .cover{opacity:.55}
+.v3 .ct{font:700 13px/1.05 var(--f-disp);text-transform:uppercase;padding:10px;letter-spacing:.02em}
+.v3 .side{border-left:1px solid var(--line);background:var(--panel);padding:18px max(18px,env(safe-area-inset-right,0px)) 30px 18px;display:flex;flex-direction:column;gap:16px;min-width:0}
+.v3 .side .cover{border-radius:8px;aspect-ratio:16/10}
+.v3 .side .cover .ct{font-size:22px}
+.v3 .side h2{font:700 22px/1.1 var(--f-disp);margin:0;text-transform:uppercase;letter-spacing:.02em}
+.v3 .kv{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.v3 .kv div{background:var(--panel);padding:10px 12px;display:flex;flex-direction:column;gap:2px}
+.v3 .kv small{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.08em}
+.v3 .kv b{font:600 17px var(--f-disp);font-variant-numeric:tabular-nums}
+.v3 .plist{display:flex;flex-direction:column;gap:6px}
+.v3 .plist div{display:flex;justify-content:space-between;font-size:13px;padding:8px 10px;background:var(--raise);border-radius:6px}
+.v3 .plist em{font-style:normal;color:var(--dim)}
+.v3 .play{width:100%}
+.v3 .play-main{flex:1;background:var(--accent);color:#1a1205;padding:13px;font:700 15px var(--f-disp);text-transform:uppercase;letter-spacing:.08em;border-radius:8px 0 0 8px;clip-path:polygon(0 0,100% 0,100% 100%,10px 100%,0 calc(100% - 10px))}
+.v3 .play-alt{background:#d6922c;color:#1a1205;padding:13px 14px;border-radius:0 8px 8px 0}
+.v3 .play-menu{background:var(--raise);border:1px solid var(--line);border-radius:8px;padding:4px}
+.v3 .play-menu button{padding:9px 10px;font-size:13px;border-radius:5px}
+.v3 .play-menu button:hover{background:var(--line)}
+@media (max-width:1060px){.v3{grid-template-columns:200px minmax(0,1fr)}.v3 .side{grid-column:1/-1;border-left:0;border-top:1px solid var(--line)}}
+@media (max-width:700px){.v3{grid-template-columns:minmax(0,1fr)}.v3 aside{display:none}}
+
+/* ================= 4 · KARTUŞ ================= */
+.v4{--bg:#dfece4;--fg:#18201b;--dim:#56635a;--card:#fbfdfb;--steam:#3d6bff;--epic:#18201b;--ubi:#ff6a3d;
+  --f-disp:"Bricolage Grotesque",sans-serif;--f-body:"DM Sans",sans-serif;
+  background:var(--bg);color:var(--fg);font-family:var(--f-body);min-height:100%;color-scheme:light;
+  padding:24px max(16px,env(safe-area-inset-right,0px)) 60px max(16px,env(safe-area-inset-left,0px))}
+.v4 header{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:26px}
+.v4 .logo{font:800 30px var(--f-disp);letter-spacing:-.03em;display:flex;align-items:center;gap:10px}
+.v4 .logo i{width:30px;height:30px;border:3px solid var(--fg);border-radius:8px;background:var(--ubi);box-shadow:3px 3px 0 var(--fg);display:inline-block}
+.v4 .greet{flex:1 1 200px;color:var(--dim);font-size:15px}
+.v4 .search{border:2.5px solid var(--fg);border-radius:12px;background:var(--card);padding:10px 14px;font:inherit;width:min(260px,100%);box-shadow:3px 3px 0 var(--fg)}
+.v4 .chips{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:24px}
+.v4 .chip{border:2.5px solid var(--fg);border-radius:999px;padding:7px 15px;font-weight:700;font-size:14px;background:var(--card);box-shadow:2px 2px 0 var(--fg);transition:transform .1s,box-shadow .1s}
+.v4 .chip:active{transform:translate(2px,2px);box-shadow:0 0 0 var(--fg)}
+.v4 .chip.on{background:var(--fg);color:var(--card)}
+.v4 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:22px}
+.v4 .card{text-align:left;background:var(--card);border:3px solid var(--fg);border-radius:18px;box-shadow:5px 5px 0 var(--fg);padding:10px;display:flex;flex-direction:column;gap:10px;transform-style:preserve-3d;will-change:transform}
+.v4 .card .cover{border-radius:10px;border:2.5px solid var(--fg)}
+.v4 .card .cn{font:700 17px/1.1 var(--f-disp);letter-spacing:-.01em}
+.v4 .card .foot{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.v4 .pls{display:flex;gap:4px}
+.v4 .pl{font-size:11px;font-weight:700;border:2px solid var(--fg);border-radius:6px;padding:1px 6px;color:#fff}
+.v4 .pl.steam{background:var(--steam)}.v4 .pl.epic{background:var(--epic)}.v4 .pl.ubisoft{background:var(--ubi)}
+.v4 .hrs{font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums}
+.v4 .notinst{background:transparent;border-style:dashed;box-shadow:none}
+.v4 .notinst .cover{filter:saturate(.3);opacity:.7}
+.v4 .ct{font:800 24px/.95 var(--f-disp);letter-spacing:-.03em;padding:12px;color:#fff;text-wrap:balance}
+.v4 .sheet-wrap{position:fixed;inset:0;z-index:45;background:rgba(24,32,27,.45);display:flex;align-items:flex-end;justify-content:center;padding:16px}
+.v4 .sheet{background:var(--card);border:3px solid var(--fg);border-radius:24px;box-shadow:8px 8px 0 var(--fg);max-width:720px;width:100%;padding:20px;display:grid;grid-template-columns:200px minmax(0,1fr);gap:22px;margin-bottom:env(safe-area-inset-bottom,0px)}
+.v4 .sheet .cover{border-radius:14px;border:3px solid var(--fg)}
+.v4 .sheet h2{font:800 clamp(28px,4vw,40px)/1 var(--f-disp);margin:0 0 10px;letter-spacing:-.03em}
+.v4 .sheet .facts{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px}
+.v4 .sheet .facts span{background:var(--bg);border:2px solid var(--fg);border-radius:10px;padding:6px 10px;font-size:13px;font-weight:500}
+.v4 .sheet .x{float:right;border:2.5px solid var(--fg);border-radius:10px;width:36px;height:36px;font-weight:700;background:var(--card)}
+.v4 .play-main{background:var(--ubi);border:3px solid var(--fg);border-right:0;border-radius:14px 0 0 14px;padding:14px 26px;font:800 18px var(--f-disp);box-shadow:4px 4px 0 var(--fg);color:var(--fg)}
+.v4 .play-alt{background:var(--ubi);border:3px solid var(--fg);border-radius:0 14px 14px 0;padding:14px 14px;box-shadow:4px 4px 0 var(--fg);font-weight:800}
+.v4 .play-menu{background:var(--card);border:3px solid var(--fg);border-radius:14px;padding:6px;box-shadow:4px 4px 0 var(--fg)}
+.v4 .play-menu button{padding:9px 12px;border-radius:9px;font-weight:700;font-size:14px}
+.v4 .play-menu button:hover{background:var(--bg)}
+@media (max-width:600px){.v4 .sheet{grid-template-columns:1fr}.v4 .sheet .cover{width:140px}}
+
+.v1 .play-main.solo{border-radius:999px}.v3 .play-main.solo{border-radius:8px}.v4 .play-main.solo{border-radius:14px;border-right:3px solid var(--fg)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="shell" role="tablist" aria-label="Arayüz yönleri">
+  <b>Hangar</b>
+  <div class="tabs" id="tabs"></div>
+  <div class="tab-note" id="note"></div>
+</div>
+<div class="stage" id="stage"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script>
+const GAMES=[
+ {t:"Elden Ring",p:["steam"],inst:true,size:"49 GB",last:"Dün",h:186},
+ {t:"Hades",p:["steam","epic"],inst:true,size:"15 GB",last:"3 gün önce",h:74},
+ {t:"Baldur's Gate 3",p:["steam"],inst:true,size:"122 GB",last:"1 hafta önce",h:212},
+ {t:"Alan Wake 2",p:["epic"],inst:true,size:"90 GB",last:"2 hafta önce",h:21},
+ {t:"Cyberpunk 2077",p:["steam","epic"],inst:true,size:"70 GB",last:"1 ay önce",h:143},
+ {t:"Control",p:["epic","steam"],inst:false,size:"—",last:"4 ay önce",h:18},
+ {t:"Hollow Knight",p:["steam"],inst:true,size:"9 GB",last:"2 ay önce",h:61},
+ {t:"Assassin's Creed Valhalla",p:["ubisoft"],inst:true,size:"160 GB",last:"5 ay önce",h:48},
+ {t:"Disco Elysium",p:["steam"],inst:false,size:"—",last:"1 yıl önce",h:32},
+ {t:"Death Stranding",p:["epic","steam"],inst:true,size:"80 GB",last:"3 hafta önce",h:55},
+ {t:"Celeste",p:["steam","epic"],inst:false,size:"—",last:"8 ay önce",h:14},
+ {t:"Red Dead Redemption 2",p:["steam"],inst:false,size:"—",last:"6 ay önce",h:97},
+ {t:"Rocket League",p:["epic"],inst:true,size:"25 GB",last:"5 gün önce",h:303},
+ {t:"Stardew Valley",p:["steam"],inst:true,size:"0.5 GB",last:"2 gün önce",h:120},
+ {t:"Sekiro",p:["steam"],inst:false,size:"—",last:"1 yıl önce",h:40},
+ {t:"Outer Wilds",p:["epic","steam"],inst:true,size:"8 GB",last:"1 hafta önce",h:25},
+];
+const PN={steam:"Steam",epic:"Epic",ubisoft:"Ubisoft"};
+const ORDER=["steam","epic","ubisoft"];
+GAMES.forEach((g,i)=>{g.id=i;g.p.sort((a,b)=>ORDER.indexOf(a)-ORDER.indexOf(b));g.pref=g.p[0];});
+const esc=s=>s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/'/g,"&#39;");
+function hue(s){let h=0;for(const c of s)h=(h*31+c.charCodeAt(0))%360;return h}
+function coverBg(g){const a=hue(g.t),b=(a+48)%360;
+  return `background:radial-gradient(120% 80% at 80% 10%,hsl(${b} 70% 60% / .9),transparent 60%),linear-gradient(160deg,hsl(${a} 55% 38%),hsl(${(a+200)%360} 45% 14%));`}
+const cover=(g,extra="")=>`<div class="cover" style="${coverBg(g)}${extra}"><span class="ct">${esc(g.t)}</span></div>`;
+function playBtn(g){
+  const verb=g.inst?"Oyna":"Kur";
+  const alts=g.p.length>1?`<button class="play-alt" aria-label="Platform seç" aria-haspopup="true" data-alt="${g.id}">▾</button>
+   <div class="play-menu" hidden>${g.p.map(p=>`<button data-pick="${g.id}:${p}">${verb} · ${PN[p]}${p===g.pref?" ✓":""}</button>`).join("")}</div>`:"";
+  return `<div class="play"><button data-run="${g.id}" class="play-main${g.p.length<2?" solo":""}">${verb} · ${PN[g.pref]}</button>${alts}</div>`;
+}
+let sel=0, filter="all", q="";
+const list=()=>GAMES.filter(g=>(filter==="all"||(filter==="inst"?g.inst:g.p.includes(filter)))&&g.t.toLowerCase().includes(q.toLowerCase()));
+const totalH=GAMES.reduce((s,g)=>s+g.h,0);
+
+/* ---------- 1 Vitrin ---------- */
+function v1(){const g=GAMES[sel]||GAMES[0];
+ const recent=[...GAMES].filter(x=>x.inst).slice(0,8);
+ const card=x=>`<button class="card ${x.id===sel?"sel":""} ${x.inst?"":"notinst"}" data-sel="${x.id}">${cover(x)}<span class="cn">${esc(x.t)}</span><span class="cp">${x.p.map(p=>PN[p]).join(" · ")}${x.inst?"":" · kurulu değil"}</span></button>`;
+ return `<div class="v1">
+  <nav class="nav"><span class="logo">HANGAR</span>
+   ${[["all","Kütüphane"],["inst","Kurulu"],["steam","Steam"],["epic","Epic"],["ubisoft","Ubisoft"]].map(([k,l])=>`<a href="#" class="${filter===k?"on":""}" data-f="${k}">${l}</a>`).join("")}
+   <span class="sp"></span><input class="search" id="q" placeholder="Oyun ara" value="${esc(q)}"></nav>
+  <section class="hero"><div class="backdrop" style="${coverBg(g)}"></div>
+   <div class="hero-in" id="heroin"><span class="eyebrow">${g.inst?"Kaldığın yerden devam et":"Kütüphanende · kurulu değil"}</span>
+    <h1>${esc(g.t)}</h1>
+    <div class="meta"><span><b>${g.h} sa</b> oynandı</span><span>Son: <b>${g.last}</b></span><span>${g.inst?g.size+" diskte":"Kurulum gerekli"}</span><span>${g.p.map(p=>PN[p]).join(" + ")}</span></div>
+    <div>${playBtn(g)}</div></div></section>
+  <section class="row"><h2>Son oynananlar</h2><div class="shelf">${recent.map(card).join("")}</div></section>
+  <section class="row"><h2>Tüm kütüphane · ${list().length}</h2><div class="grid">${list().map(card).join("")}</div></section>
+ </div>`}
+
+/* ---------- 2 Arşiv ---------- */
+function v2(){const L=list();
+ const row=(g,i)=>`<button class="rowx" data-sel="${g.id}" data-hover="${g.id}"><span class="n">${String(i+1).padStart(3,"0")}</span><span class="t">${esc(g.t)}</span><span>${g.p.map(p=>PN[p]).join(" / ")}</span><span class="${g.inst?"":"off"}">${g.inst?g.size:"kurulu değil"}</span><span>${g.last}</span><span>${g.h} sa</span></button>`;
+ const det=g=>`<div class="detail">${cover(g)}<div>
+   <dl><dt>Platform</dt><dd>${g.p.map(p=>PN[p]).join(", ")}</dd><dt>Durum</dt><dd>${g.inst?"Kurulu · "+g.size:"Kurulu değil"}</dd><dt>Toplam</dt><dd>${g.h} saat</dd><dt>Son oturum</dt><dd>${g.last}</dd></dl>
+   <table class="ptab"><tr><th>Platform</th><th>Durum</th><th>Süre</th></tr>${g.p.map((p,k)=>`<tr><td>${PN[p]}${p===g.pref?" (varsayılan)":""}</td><td>${g.inst?"kurulu":"—"}</td><td>${k===0?g.h+" sa":"0 sa"}</td></tr>`).join("")}</table>
+   ${playBtn(g)}</div></div>`;
+ return `<div class="v2"><div class="top"><span>Hangar / Kütüphane</span><span>Son tarama 21:34</span></div>
+  <h1>Kütüphane</h1>
+  <div class="stats"><span><b>${GAMES.length}</b> oyun</span><span><b>${GAMES.filter(g=>g.inst).length}</b> kurulu</span><span><b>${totalH.toLocaleString("tr-TR")}</b> saat</span><span><b>3</b> platform</span></div>
+  <div class="filters">${[["all","Tümü"],["inst","Kurulu"],["steam","Steam"],["epic","Epic"],["ubisoft","Ubisoft"]].map(([k,l])=>`<button class="${filter===k?"on":""}" data-f="${k}">${l}</button>`).join("")}<input id="q" placeholder="ARA…" value="${esc(q)}"></div>
+  <div class="list"><div class="rowx head"><span>No</span><span class="t">Oyun</span><span>Platform</span><span>Boyut</span><span>Son</span><span>Süre</span></div>
+  ${L.map((g,i)=>row(g,i)+(g.id===sel?det(g):"")).join("")}</div>
+  <div class="hover-cover" id="hc"></div></div>`}
+
+/* ---------- 3 Kokpit ---------- */
+function v3(){const g=GAMES[sel]||GAMES[0];const L=list();
+ const cnt=k=>k==="all"?GAMES.length:k==="inst"?GAMES.filter(x=>x.inst).length:GAMES.filter(x=>x.p.includes(k)).length;
+ const card=x=>`<button class="card ${x.id===sel?"sel":""} ${x.inst?"":"notinst"}" data-sel="${x.id}"><div class="badges"><span class="pg">${x.p.map(p=>`<b>${p==="ubisoft"?"UBI":p.toUpperCase().slice(0,3)}</b>`).join("")}</span><span class="dot" title="${x.inst?"Kurulu":"Kurulu değil"}"></span></div>${cover(x)}<span class="cn">${esc(x.t)}</span></button>`;
+ return `<div class="v3"><aside><div class="logo"><i></i>Hangar</div>
+  <div class="grp"><h4>Kütüphane</h4>${[["all","Tüm oyunlar"],["inst","Kurulu"]].map(([k,l])=>`<button class="${filter===k?"on":""}" data-f="${k}">${l}<span>${cnt(k)}</span></button>`).join("")}<button>Favoriler<span>4</span></button><button>Son oynananlar<span>8</span></button></div>
+  <div class="grp"><h4>Platformlar</h4>${["steam","epic","ubisoft"].map(k=>`<button class="${filter===k?"on":""}" data-f="${k}">${PN[k]}<span>${cnt(k)}</span></button>`).join("")}</div>
+  <div class="grp"><h4>Koleksiyonlar</h4><button>Soulslike<span>2</span></button><button>Kısa oyunlar<span>5</span></button><button>+ Yeni koleksiyon</button></div></aside>
+  <main><div class="bar"><label class="s">⌕<input id="q" placeholder="Kütüphanede ara" value="${esc(q)}"><kbd>Ctrl K</kbd></label><button class="sort">Sırala: Son oynanan ▾</button><button class="sort">▦ Izgara</button></div>
+   <div class="grid">${L.map(card).join("")}</div></main>
+  <section class="side">${cover(g)}<h2>${esc(g.t)}</h2>
+   <div class="kv"><div><small>Oynama</small><b>${g.h} sa</b></div><div><small>Son</small><b>${g.last}</b></div><div><small>Boyut</small><b>${g.size}</b></div><div><small>Durum</small><b>${g.inst?"Kurulu":"Yok"}</b></div></div>
+   ${playBtn(g)}
+   <div class="plist">${g.p.map(p=>`<div><span>${PN[p]}</span><em>${p===g.pref?"varsayılan":"alternatif"}</em></div>`).join("")}</div></section></div>`}
+
+/* ---------- 4 Kartuş ---------- */
+let sheetOpen=false;
+function v4(){const g=GAMES[sel]||GAMES[0];const L=list();
+ const card=x=>`<button class="card ${x.inst?"":"notinst"}" data-sel="${x.id}" data-open="1">${cover(x)}<span class="cn">${esc(x.t)}</span><span class="foot"><span class="pls">${x.p.map(p=>`<span class="pl ${p}">${PN[p]}</span>`).join("")}</span><span class="hrs">${x.h} sa</span></span></button>`;
+ return `<div class="v4"><header><span class="logo"><i></i>hangar</span><span class="greet">Akşamın iyi olsun. ${GAMES.filter(x=>x.inst).length} oyun oynamaya hazır.</span><input class="search" id="q" placeholder="Ne oynasak?" value="${esc(q)}"></header>
+  <div class="chips">${[["all","Hepsi"],["inst","Kurulu"],["steam","Steam"],["epic","Epic"],["ubisoft","Ubisoft"]].map(([k,l])=>`<button class="chip ${filter===k?"on":""}" data-f="${k}">${l}</button>`).join("")}</div>
+  <div class="grid">${L.map(card).join("")}</div>
+  ${sheetOpen?`<div class="sheet-wrap" id="sw"><div class="sheet" role="dialog" aria-label="${esc(g.t)}">${cover(g)}<div><button class="x" data-close aria-label="Kapat">✕</button><h2>${esc(g.t)}</h2>
+   <div class="facts"><span>${g.h} saat</span><span>Son: ${g.last}</span><span>${g.inst?g.size:"Kurulu değil"}</span><span>${g.p.map(p=>PN[p]).join(" + ")}</span></div>${playBtn(g)}</div></div></div>`:""}
+ </div>`}
+
+const V=[
+ {k:"vitrin",n:"Vitrin",note:"Konsol arayüzü hissi: seçili oyun büyük sahnede, arkada kapağından türeyen bulanık ışık, altta raflar.",r:v1},
+ {k:"arsiv",n:"Arşiv",note:"Editoryal katalog: dev tipografiyle liste, satıra gelince kapak imleci izler, tıklayınca satır açılır.",r:v2},
+ {k:"kokpit",n:"Kokpit",note:"Yoğun ve hızlı: sol filtreler, sık kapak ızgarası, sağda sabit detay paneli. Playnite'ın rafine hali.",r:v3},
+ {k:"kartus",n:"Kartuş",note:"Dokunsal ve oyuncu: kalın kenarlı kartlar, eğilen hover, alttan açılan detay kartı.",r:v4},
+];
+let cur=0;try{const h=location.hash.slice(1);const i=V.findIndex(v=>v.k===h);if(i>=0)cur=i}catch(e){}
+const RM=matchMedia("(prefers-reduced-motion: reduce)").matches;
+const stage=document.getElementById("stage");
+
+function tabs(){document.getElementById("tabs").innerHTML=V.map((v,i)=>`<button class="tab" role="tab" aria-selected="${i===cur}" data-tab="${i}"><span>${i+1}</span>${v.n}</button>`).join("");
+ document.getElementById("note").textContent=V[cur].note}
+function render(anim){
+ const focusQ=document.activeElement&&document.activeElement.id==="q";
+ stage.innerHTML=V[cur].r();
+ if(focusQ){const i=document.getElementById("q");i.focus();i.setSelectionRange(i.value.length,i.value.length)}
+ wire();
+ if(anim&&!RM&&window.gsap){
+  const sel={0:".v1 .hero-in > *, .v1 .row",1:".v2 h1, .v2 .stats, .v2 .rowx",2:".v3 .card, .v3 .side > *",3:".v4 .card"}[cur];
+  gsap.from(sel,{y:18,opacity:0,duration:.6,ease:"power3.out",stagger:{each:.03,from:"start"},clearProps:"all"});
+ }
+}
+function toast(msg){const t=document.createElement("div");t.className="toast";t.textContent=msg;document.body.appendChild(t);
+ if(window.gsap&&!RM){gsap.from(t,{y:20,opacity:0,duration:.3});gsap.to(t,{opacity:0,y:10,delay:2,duration:.3,onComplete:()=>t.remove()})}else setTimeout(()=>t.remove(),2300)}
+
+function wire(){
+  if(cur===1){const hc=document.getElementById("hc");
+  stage.querySelectorAll("[data-hover]").forEach(r=>{r.addEventListener("mouseenter",()=>{const g=GAMES[+r.dataset.hover];hc.style.cssText=hc.style.cssText.replace(/background[^;]*;?/g,"");hc.innerHTML=cover(g);if(window.gsap)gsap.to(hc,{opacity:1,scale:1,duration:.2})});
+   r.addEventListener("mouseleave",()=>{if(window.gsap)gsap.to(hc,{opacity:0,duration:.15})})});
+  stage.addEventListener("mousemove",e=>{if(window.gsap)gsap.to(hc,{x:e.clientX+24,y:e.clientY-100,left:0,top:0,duration:.35,ease:"power3.out"})})}
+ if(cur===3&&!RM&&window.gsap){stage.querySelectorAll(".v4 .card").forEach(c=>{
+  c.addEventListener("mousemove",e=>{const r=c.getBoundingClientRect();const x=(e.clientX-r.left)/r.width-.5,y=(e.clientY-r.top)/r.height-.5;gsap.to(c,{rotateY:x*10,rotateX:-y*10,transformPerspective:700,duration:.3})});
+  c.addEventListener("mouseleave",()=>gsap.to(c,{rotateX:0,rotateY:0,duration:.5,ease:"elastic.out(1,.5)"}))});
+  const sw=document.querySelector(".v4 .sheet");if(sw)gsap.from(sw,{y:60,opacity:0,duration:.45,ease:"back.out(1.4)"})}
+}
+document.addEventListener("input",e=>{if(e.target.id==="q"){q=e.target.value;render(false)}});
+document.addEventListener("click",e=>{
+ const t=e.target.closest("button,a");if(!t)return;
+ if(t.dataset.tab!==undefined){cur=+t.dataset.tab;sheetOpen=false;try{history.replaceState(null,"","#"+V[cur].k)}catch(_){location.hash=V[cur].k}tabs();render(true);window.scrollTo(0,0);return}
+ if(t.dataset.f){e.preventDefault();filter=t.dataset.f;render(true);return}
+ if(t.dataset.alt!==undefined){const m=t.nextElementSibling;m.hidden=!m.hidden;if(!m.hidden&&window.gsap&&!RM)gsap.from(m,{y:-6,opacity:0,duration:.18});return}
+ if(t.dataset.pick){const[id,p]=t.dataset.pick.split(":");GAMES[id].pref=p;render(false);toast(`${GAMES[id].t} bundan sonra ${PN[p]} üzerinden açılacak`);return}
+ if(t.dataset.run!==undefined){const g=GAMES[t.dataset.run];toast(g.inst?`${g.t} ${PN[g.pref]} üzerinden başlatılıyor…`:`${PN[g.pref]} kurulum için açılıyor…`);return}
+ if(t.dataset.close!==undefined){sheetOpen=false;render(false);return}
+ if(t.dataset.sel!==undefined){const id=+t.dataset.sel;
+  if(cur===1&&sel===id){sel=-1;render(false);return}
+  sel=id;if(t.dataset.open)sheetOpen=true;render(false);
+  if(cur===0){window.scrollTo({top:0,behavior:RM?"auto":"smooth"});if(window.gsap&&!RM)gsap.from("#heroin > *",{y:14,opacity:0,stagger:.05,duration:.5,ease:"power3.out"})}
+  if(cur===2&&window.gsap&&!RM)gsap.from(".v3 .side > *",{x:12,opacity:0,stagger:.04,duration:.35})
+ }
+});
+document.addEventListener("click",e=>{if(e.target.id==="sw"){sheetOpen=false;render(false)}});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&sheetOpen){sheetOpen=false;render(false)}});
+window.addEventListener("hashchange",()=>{const i=V.findIndex(v=>v.k===location.hash.slice(1));if(i>=0&&i!==cur){cur=i;tabs();render(true)}});
+tabs();render(true);
+</script>

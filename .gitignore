@@ -4,3 +4,4 @@ dist/
 target/
 probe-out/
 probe-out.zip
+src-tauri/gen/

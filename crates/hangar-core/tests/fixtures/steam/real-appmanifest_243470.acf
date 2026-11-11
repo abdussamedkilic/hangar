@@ -1,0 +1,97 @@
+"AppState"
+{
+	"appid"		"243470"
+	"Universe"		"1"
+	"LauncherPath"		"C:\\Program Files (x86)\\Steam\\steam.exe"
+	"name"		"Watch_Dogs"
+	"StateFlags"		"4"
+	"installdir"		"Watch_Dogs"
+	"LastUpdated"		"1784663741"
+	"LastPlayed"		"1786987805"
+	"SizeOnDisk"		"18669351068"
+	"StagingSize"		"0"
+	"buildid"		"11241563"
+	"LastOwner"		"MASKED"
+	"DownloadType"		"1"
+	"UpdateResult"		"0"
+	"BytesToDownload"		"202443616"
+	"BytesDownloaded"		"202443616"
+	"BytesToStage"		"263096496"
+	"BytesStaged"		"263096496"
+	"TargetBuildID"		"11241563"
+	"AutoUpdateBehavior"		"0"
+	"AllowOtherDownloadsWhileRunning"		"0"
+	"ScheduledAutoUpdate"		"0"
+	"InstalledDepots"
+	{
+		"243437"
+		{
+			"manifest"		"6543707150037666796"
+			"size"		"1790331721"
+		}
+		"293055"
+		{
+			"manifest"		"7966729444078833786"
+			"size"		"28037350"
+			"dlcappid"		"293055"
+		}
+		"293057"
+		{
+			"manifest"		"3489527419200560368"
+			"size"		"30841083"
+			"dlcappid"		"293057"
+		}
+		"293059"
+		{
+			"manifest"		"6421005004532097582"
+			"size"		"1147"
+			"dlcappid"		"293059"
+		}
+		"293061"
+		{
+			"manifest"		"4116348827715489844"
+			"size"		"3718567700"
+			"dlcappid"		"293061"
+		}
+		"293054"
+		{
+			"manifest"		"3534712475932838237"
+			"size"		"525"
+			"dlcappid"		"293054"
+		}
+		"243489"
+		{
+			"manifest"		"362035036454864186"
+			"size"		"109784131"
+		}
+		"243471"
+		{
+			"manifest"		"5582561119037069284"
+			"size"		"12728690915"
+		}
+		"1716751"
+		{
+			"manifest"		"6945505966615327303"
+			"size"		"263096496"
+		}
+	}
+	"InstallScripts"
+	{
+		"243489"		"scripts\\installscript.vdf"
+	}
+	"SharedDepots"
+	{
+		"228982"		"228980"
+		"228983"		"228980"
+		"228988"		"228980"
+		"228990"		"228980"
+	}
+	"UserConfig"
+	{
+		"language"		"english"
+	}
+	"MountedConfig"
+	{
+		"language"		"english"
+	}
+}

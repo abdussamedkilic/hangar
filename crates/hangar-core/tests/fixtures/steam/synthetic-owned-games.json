@@ -1,0 +1,31 @@
+{
+  "response": {
+    "game_count": 2,
+    "games": [
+      {
+        "appid": 620,
+        "name": "Portal 2",
+        "playtime_forever": 1234,
+        "img_icon_url": "2e7d8b5c1f4a3b6d9e0f1a2b3c4d5e6f7a8b9c0d",
+        "has_community_visible_stats": true,
+        "playtime_windows_forever": 1000,
+        "playtime_mac_forever": 0,
+        "playtime_linux_forever": 234,
+        "rtime_last_played": 1730000000,
+        "playtime_disconnected": 0
+      },
+      {
+        "appid": 220,
+        "name": "Half-Life 2",
+        "playtime_forever": 0,
+        "img_icon_url": "fcfb366051782b8ebf2aa297f3b746395858cb62",
+        "has_community_visible_stats": true,
+        "playtime_windows_forever": 0,
+        "playtime_mac_forever": 0,
+        "playtime_linux_forever": 0,
+        "rtime_last_played": 0,
+        "playtime_disconnected": 0
+      }
+    ]
+  }
+}

@@ -1,0 +1,317 @@
+<title>Hangar Melez Yönler</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;600;800&family=Manrope:wght@400;500;700&family=Archivo:wdth,wght@62..125,400..900&family=IBM+Plex+Mono:wght@400;500;700&family=Chakra+Petch:wght@500;600;700&family=Figtree:wght@400;500;600&family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=DM+Sans:wght@400;500;700&display=swap">
+<style>
+/* Kabuk aynı; dört melez: K+V, V+K, A+Kş, Kş+A. Her biri kendi tek temasına bağlı (bilinçli). */
+:root{--shell-bg:#0d0f12;--shell-fg:#e8eaee;--shell-dim:#8a9099;--shell-line:#262a31;--f-shell:"Manrope",system-ui,sans-serif;color-scheme:dark}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{background:var(--shell-bg);color:var(--shell-fg);font-family:var(--f-shell);overflow-x:hidden}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid currentColor;outline-offset:2px}
+.shell{position:sticky;top:env(safe-area-inset-top,0px);z-index:50;background:var(--shell-bg);border-bottom:1px solid var(--shell-line);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:10px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:60;background:var(--shell-bg)}
+.shell b{font-weight:700}
+.tabs{display:flex;gap:4px;flex-wrap:wrap}
+.tab{padding:7px 12px;border-radius:999px;color:var(--shell-dim);font-size:13px;font-weight:500;display:flex;gap:8px;align-items:baseline}
+.tab span{opacity:.6;font-size:12px}
+.tab[aria-selected="true"]{background:var(--shell-fg);color:var(--shell-bg)}
+.tab-note{color:var(--shell-dim);font-size:13px;flex:1 1 260px;min-width:0}
+.cover{position:relative;overflow:hidden;aspect-ratio:3/4;max-width:100%;display:flex;align-items:flex-end}
+.cover .ct{position:relative;z-index:1}
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:80;background:#111;color:#fff;padding:12px 18px;border-radius:10px;font:500 14px var(--f-shell);box-shadow:0 10px 40px rgba(0,0,0,.4);max-width:calc(100% - 32px)}
+.play{position:relative;display:inline-flex}
+.play-menu{position:absolute;top:calc(100% + 6px);left:0;min-width:100%;z-index:20;display:flex;flex-direction:column}
+.play-menu button{text-align:left;white-space:nowrap}
+
+/* ===== 5 · Kokpit + Vitrin sahnesi ===== */
+.m1{--bg:#0f1318;--panel:#151a21;--raise:#1d242e;--fg:#e8ebf0;--dim:#8892a0;--line:#252d38;--accent:#f2a93b;
+ --f-disp:"Chakra Petch",sans-serif;--f-body:"Figtree",sans-serif;background:var(--bg);color:var(--fg);font-family:var(--f-body);min-height:100%;display:grid;grid-template-columns:220px minmax(0,1fr)}
+.m1 aside{border-right:1px solid var(--line);padding:18px 12px 18px max(12px,env(safe-area-inset-left,0px));display:flex;flex-direction:column;gap:22px;font-size:14px;background:var(--bg);position:relative;z-index:2}
+.m1 .logo{font:700 18px var(--f-disp);letter-spacing:.08em;text-transform:uppercase;padding:0 8px;display:flex;gap:8px;align-items:center}
+.m1 .logo i{width:10px;height:10px;background:var(--accent);clip-path:polygon(0 0,100% 50%,0 100%)}
+.m1 .grp{display:flex;flex-direction:column;gap:2px}
+.m1 .grp h4{font:600 11px var(--f-disp);letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin:0 0 6px 8px}
+.m1 .grp button{display:flex;justify-content:space-between;padding:7px 8px;border-radius:6px;color:var(--dim);text-align:left}
+.m1 .grp button span{font-variant-numeric:tabular-nums;font-size:12px}
+.m1 .grp button.on{background:var(--raise);color:var(--fg)}
+.m1 main{min-width:0;position:relative}
+.m1 .stage{position:relative;overflow:hidden;padding:26px max(22px,env(safe-area-inset-right,0px)) 26px 26px;min-height:300px;display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:26px;align-items:end;border-bottom:1px solid var(--line)}
+.m1 .bd{position:absolute;inset:-60px;filter:blur(50px) saturate(1.3);opacity:.7}
+.m1 .stage::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(15,19,24,.92) 20%,rgba(15,19,24,.35)),linear-gradient(0deg,var(--bg),transparent 60%)}
+.m1 .stage>*:not(.bd){position:relative;z-index:1}
+.m1 .st-l{display:flex;flex-direction:column;gap:14px;min-width:0}
+.m1 .eb{font:600 11px var(--f-disp);letter-spacing:.16em;text-transform:uppercase;color:var(--accent)}
+.m1 h1{font:700 clamp(30px,5vw,56px)/.95 var(--f-disp);margin:0;text-transform:uppercase;letter-spacing:.01em;text-wrap:balance}
+.m1 .kv{display:flex;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:8px;overflow:hidden;width:fit-content;max-width:100%;flex-wrap:wrap}
+.m1 .kv div{background:rgba(21,26,33,.85);padding:8px 14px;display:flex;flex-direction:column}
+.m1 .kv small{font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.1em}
+.m1 .kv b{font:600 16px var(--f-disp);font-variant-numeric:tabular-nums}
+.m1 .stage .cover{border-radius:8px;box-shadow:0 30px 60px rgba(0,0,0,.6)}
+.m1 .stage .cover .ct{font-size:20px}
+.m1 .bar{display:flex;gap:10px;align-items:center;padding:16px 22px 0 26px;flex-wrap:wrap}
+.m1 .bar .s{flex:1 1 220px;display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 12px;color:var(--dim);font-size:14px}
+.m1 .bar input{background:none;border:0;color:var(--fg);font:inherit;flex:1;min-width:0}
+.m1 kbd{font:500 11px var(--f-disp);border:1px solid var(--line);border-radius:4px;padding:1px 6px;color:var(--dim)}
+.m1 .bar .sort{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:13px;color:var(--dim)}
+.m1 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:12px;padding:16px 22px 40px 26px}
+.m1 .card{text-align:left;display:flex;flex-direction:column;gap:6px;position:relative}
+.m1 .card .cover{border-radius:6px;outline:1px solid var(--line);transition:transform .2s}
+.m1 .card:hover .cover{transform:translateY(-3px)}
+.m1 .card.sel .cover{outline:2px solid var(--accent)}
+.m1 .card .cn{font-size:12.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.m1 .badges{position:absolute;top:6px;left:6px;right:6px;z-index:2;display:flex;justify-content:space-between}
+.m1 .pg{display:flex;gap:3px}.m1 .pg b{font:700 9px var(--f-disp);background:rgba(10,12,16,.75);padding:2px 4px;border-radius:3px}
+.m1 .dot{width:8px;height:8px;border-radius:50%;background:#4fd18b;box-shadow:0 0 0 2px rgba(10,12,16,.75)}
+.m1 .notinst .dot{background:transparent;border:1.5px solid var(--dim)}.m1 .notinst .cover{opacity:.55}
+.m1 .ct{font:700 13px/1.05 var(--f-disp);text-transform:uppercase;padding:10px}
+.m1 .play-main{background:var(--accent);color:#1a1205;padding:13px 24px;font:700 15px var(--f-disp);text-transform:uppercase;letter-spacing:.08em;border-radius:8px 0 0 8px;clip-path:polygon(0 0,100% 0,100% 100%,10px 100%,0 calc(100% - 10px))}
+.m1 .play-main.solo{border-radius:8px}
+.m1 .play-alt{background:#d6922c;color:#1a1205;padding:13px 14px;border-radius:0 8px 8px 0}
+.m1 .play-menu{background:var(--raise);border:1px solid var(--line);border-radius:8px;padding:4px}
+.m1 .play-menu button{padding:9px 10px;font-size:13px;border-radius:5px}.m1 .play-menu button:hover{background:var(--line)}
+@media (max-width:820px){.m1{grid-template-columns:minmax(0,1fr)}.m1 aside{display:none}.m1 .stage{grid-template-columns:1fr}.m1 .stage .cover{display:none}}
+
+/* ===== 6 · Vitrin + Kokpit HUD ===== */
+.m2{--bg:#07090d;--fg:#f3f1ec;--dim:#9aa0aa;--line:rgba(255,255,255,.1);--glass:rgba(14,17,23,.6);--hi:#f2a93b;
+ --f-disp:"Unbounded",sans-serif;--f-body:"Manrope",sans-serif;background:var(--bg);color:var(--fg);font-family:var(--f-body);min-height:100%}
+.m2 .nav{display:flex;align-items:center;gap:22px;padding:18px max(16px,env(safe-area-inset-right,0px)) 18px max(24px,env(safe-area-inset-left,0px));position:relative;z-index:2;flex-wrap:wrap}
+.m2 .logo{font:800 18px var(--f-disp);letter-spacing:.04em}
+.m2 .nav .sp{flex:1}
+.m2 .search{background:var(--glass);border:1px solid var(--line);border-radius:999px;padding:9px 16px;color:var(--fg);width:min(240px,100%);font:inherit;font-size:14px}
+.m2 .hero{position:relative;margin-top:-64px;padding:110px max(16px,env(safe-area-inset-right,0px)) 36px max(24px,env(safe-area-inset-left,0px));min-height:460px;display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:28px;align-items:end;overflow:hidden}
+.m2 .bd{position:absolute;inset:-40px;filter:blur(40px) saturate(1.2);opacity:.9;transform:scale(1.1)}
+.m2 .hero::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(7,9,13,.15),var(--bg) 95%),linear-gradient(90deg,rgba(7,9,13,.7),transparent 70%)}
+.m2 .hero>*:not(.bd){position:relative;z-index:1}
+.m2 .hl{display:flex;flex-direction:column;gap:16px;min-width:0}
+.m2 .eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+.m2 h1{font:600 clamp(32px,6vw,68px)/1 var(--f-disp);margin:0;text-wrap:balance}
+.m2 .hud{background:var(--glass);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid var(--line);border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:12px}
+.m2 .hud h5{margin:0;font:600 11px var(--f-disp);letter-spacing:.12em;text-transform:uppercase;color:var(--dim)}
+.m2 .hkv{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.m2 .hkv div{display:flex;flex-direction:column;gap:2px}
+.m2 .hkv small{font-size:11px;color:var(--dim)}
+.m2 .hkv b{font:600 18px var(--f-disp);font-variant-numeric:tabular-nums}
+.m2 .bars{display:flex;align-items:flex-end;gap:4px;height:38px}
+.m2 .bars i{flex:1;background:rgba(255,255,255,.18);border-radius:3px 3px 0 0}
+.m2 .bars i.now{background:var(--hi)}
+.m2 .plats{display:flex;flex-direction:column;gap:6px;font-size:13px}
+.m2 .plats div{display:flex;justify-content:space-between;padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.05)}
+.m2 .plats em{font-style:normal;color:var(--dim)}
+.m2 .play-main{background:var(--fg);color:var(--bg);padding:14px 26px;border-radius:999px 0 0 999px;font-weight:700;font-size:15px}
+.m2 .play-main.solo{border-radius:999px}
+.m2 .play-alt{background:var(--fg);color:var(--bg);padding:14px 16px;border-radius:0 999px 999px 0;border-left:1px solid rgba(0,0,0,.15)}
+.m2 .play-menu{background:#141821;border:1px solid var(--line);border-radius:14px;padding:6px}
+.m2 .play-menu button{padding:10px 12px;border-radius:9px;font-size:14px}.m2 .play-menu button:hover{background:rgba(255,255,255,.07)}
+.m2 .tools{display:flex;gap:8px;flex-wrap:wrap;padding:0 max(16px,env(safe-area-inset-right,0px)) 16px max(24px,env(safe-area-inset-left,0px));align-items:center}
+.m2 .pill{border:1px solid var(--line);border-radius:999px;padding:7px 14px;font-size:13px;color:var(--dim);display:flex;gap:8px}
+.m2 .pill span{font-variant-numeric:tabular-nums;opacity:.7}
+.m2 .pill.on{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.m2 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:14px;padding:0 max(16px,env(safe-area-inset-right,0px)) 50px max(24px,env(safe-area-inset-left,0px))}
+.m2 .card{text-align:left;display:flex;flex-direction:column;gap:6px;position:relative}
+.m2 .card .cover{border-radius:10px;transition:transform .3s,box-shadow .3s}
+.m2 .card:hover .cover{transform:translateY(-4px) scale(1.02);box-shadow:0 18px 40px rgba(0,0,0,.5)}
+.m2 .card.sel .cover{box-shadow:0 0 0 2px var(--fg)}
+.m2 .card .cn{font-size:12.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.m2 .card .dot{position:absolute;top:8px;right:8px;z-index:2;width:8px;height:8px;border-radius:50%;background:#4fd18b}
+.m2 .notinst .dot{background:transparent;border:1.5px solid #fff}.m2 .notinst .cover{filter:grayscale(.7) brightness(.7)}
+.m2 .ct{font:600 14px/1.1 var(--f-disp);padding:12px;text-wrap:balance}
+@media (max-width:820px){.m2 .hero{grid-template-columns:1fr}}
+
+/* ===== 7 · Arşiv + Kartuş ===== */
+.m3{--bg:#e6efe9;--fg:#121614;--dim:#56635a;--card:#fbfdfb;--steam:#3d6bff;--epic:#121614;--ubi:#ff6a3d;
+ --f-disp:"Archivo",sans-serif;--f-mono:"IBM Plex Mono",monospace;background:var(--bg);color:var(--fg);font-family:var(--f-mono);min-height:100%;color-scheme:light;padding:24px max(16px,env(safe-area-inset-right,0px)) 60px max(16px,env(safe-area-inset-left,0px))}
+.m3 .top{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;font-size:12px;text-transform:uppercase;letter-spacing:.08em}
+.m3 .mast{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap;margin:14px 0 22px}
+.m3 h1{font-family:var(--f-disp);font-stretch:62%;font-weight:900;font-size:clamp(60px,13vw,160px);line-height:.82;margin:0;text-transform:uppercase;letter-spacing:-.02em}
+.m3 .stats{display:grid;grid-template-columns:repeat(2,auto);gap:8px}
+.m3 .stats div{border:2.5px solid var(--fg);border-radius:12px;background:var(--card);box-shadow:3px 3px 0 var(--fg);padding:8px 14px;font-size:12px;text-transform:uppercase}
+.m3 .stats b{display:block;font-family:var(--f-disp);font-stretch:75%;font-size:26px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1}
+.m3 .filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px;align-items:center}
+.m3 .chip{border:2.5px solid var(--fg);border-radius:999px;padding:5px 14px;font-weight:700;font-size:12px;text-transform:uppercase;background:var(--card);box-shadow:2px 2px 0 var(--fg)}
+.m3 .chip.on{background:var(--fg);color:var(--card)}
+.m3 .filters input{margin-left:auto;border:2.5px solid var(--fg);border-radius:10px;background:var(--card);padding:7px 12px;font:inherit;width:min(220px,100%)}
+.m3 .list{display:flex;flex-direction:column;gap:10px}
+.m3 .rowx{display:grid;grid-template-columns:48px minmax(0,1fr) auto 100px 70px;gap:14px;align-items:center;padding:12px 16px;border:2.5px solid var(--fg);border-radius:14px;background:var(--card);width:100%;text-align:left;font-size:13px;font-variant-numeric:tabular-nums;box-shadow:4px 4px 0 var(--fg);transition:transform .12s,box-shadow .12s}
+.m3 .rowx:hover{transform:translate(-2px,-2px);box-shadow:6px 6px 0 var(--fg)}
+.m3 .rowx.off{background:transparent;border-style:dashed;box-shadow:none}
+.m3 .rowx .n{font-family:var(--f-disp);font-stretch:62%;font-weight:900;font-size:26px;color:var(--dim)}
+.m3 .rowx .t{font-family:var(--f-disp);font-stretch:75%;font-weight:800;font-size:clamp(20px,2.8vw,30px);line-height:1;text-transform:uppercase}
+.m3 .pls{display:flex;gap:4px}
+.m3 .pl{font-size:10px;font-weight:700;border:2px solid var(--fg);border-radius:6px;padding:1px 6px;color:#fff;text-transform:uppercase}
+.m3 .pl.steam{background:var(--steam)}.m3 .pl.epic{background:var(--epic)}.m3 .pl.ubisoft{background:var(--ubi)}
+.m3 .detail{display:grid;grid-template-columns:190px minmax(0,1fr);gap:24px;padding:18px;border:3px solid var(--fg);border-radius:18px;background:var(--card);box-shadow:6px 6px 0 var(--fg);margin:2px 0 8px}
+.m3 .detail .cover{border:2.5px solid var(--fg);border-radius:12px}
+.m3 .detail h2{font-family:var(--f-disp);font-stretch:62%;font-weight:900;font-size:clamp(34px,5vw,56px);line-height:.9;margin:0 0 14px;text-transform:uppercase}
+.m3 .ptab{border-collapse:collapse;font-size:12px;margin-bottom:18px;width:100%;max-width:440px}
+.m3 .ptab td,.m3 .ptab th{border-top:1.5px solid var(--fg);padding:6px 8px 6px 0;text-align:left;font-weight:400}
+.m3 .ptab th{color:var(--dim);font-size:11px;text-transform:uppercase}
+.m3 .ct{font-family:var(--f-disp);font-stretch:62%;font-weight:900;font-size:26px;line-height:.9;text-transform:uppercase;padding:12px;color:#fff}
+.m3 .play-main{background:var(--ubi);border:2.5px solid var(--fg);border-right:0;border-radius:12px 0 0 12px;padding:12px 22px;font:700 13px var(--f-mono);text-transform:uppercase;box-shadow:3px 3px 0 var(--fg)}
+.m3 .play-main.solo{border-radius:12px;border-right:2.5px solid var(--fg)}
+.m3 .play-alt{background:var(--ubi);border:2.5px solid var(--fg);border-radius:0 12px 12px 0;padding:12px;box-shadow:3px 3px 0 var(--fg)}
+.m3 .play-menu{background:var(--card);border:2.5px solid var(--fg);border-radius:12px;padding:4px;box-shadow:3px 3px 0 var(--fg)}
+.m3 .play-menu button{padding:8px 10px;font-size:12px;border-radius:8px}.m3 .play-menu button:hover{background:var(--bg)}
+@media (max-width:760px){.m3 .rowx{grid-template-columns:34px minmax(0,1fr)}.m3 .rowx>:nth-child(n+3){display:none}.m3 .detail{grid-template-columns:1fr}.m3 .detail .cover{width:150px}}
+
+/* ===== 8 · Kartuş + Arşiv ===== */
+.m4{--bg:#f1f1ee;--fg:#0f1012;--dim:#62656b;--card:#ffffff;--steam:#3d6bff;--epic:#0f1012;--ubi:#ff6a3d;
+ --f-disp:"Archivo",sans-serif;--f-mono:"IBM Plex Mono",monospace;--f-body:"DM Sans",sans-serif;background:var(--bg);color:var(--fg);font-family:var(--f-body);min-height:100%;color-scheme:light;padding:22px max(16px,env(safe-area-inset-right,0px)) 60px max(16px,env(safe-area-inset-left,0px))}
+.m4 header{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;border-bottom:3px solid var(--fg);padding-bottom:12px;margin-bottom:18px}
+.m4 .logo{font-family:var(--f-disp);font-stretch:62%;font-weight:900;font-size:clamp(44px,8vw,84px);line-height:.85;text-transform:uppercase;letter-spacing:-.02em}
+.m4 .greet{flex:1 1 200px;font:400 12px var(--f-mono);color:var(--dim);text-transform:uppercase;letter-spacing:.06em}
+.m4 .search{border:2.5px solid var(--fg);border-radius:12px;background:var(--card);padding:9px 14px;font:13px var(--f-mono);width:min(240px,100%)}
+.m4 .chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:22px}
+.m4 .chip{border:2.5px solid var(--fg);border-radius:10px;padding:6px 12px;font:500 12px var(--f-mono);text-transform:uppercase;background:var(--card)}
+.m4 .chip span{opacity:.55;margin-left:6px}
+.m4 .chip.on{background:var(--fg);color:var(--card)}
+.m4 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(176px,1fr));gap:20px}
+.m4 .card{text-align:left;background:var(--card);border:3px solid var(--fg);border-radius:16px;box-shadow:5px 5px 0 var(--fg);display:flex;flex-direction:column;overflow:hidden;transform-style:preserve-3d;will-change:transform}
+.m4 .card .cover{border-bottom:3px solid var(--fg)}
+.m4 .card .meta{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;padding:10px 12px;font:400 11px var(--f-mono);font-variant-numeric:tabular-nums}
+.m4 .card .meta .no{grid-row:span 2;font-family:var(--f-disp);font-stretch:62%;font-weight:900;font-size:30px;line-height:1}
+.m4 .card .meta .pp{color:var(--dim);text-transform:uppercase}
+.m4 .stripe{display:flex;height:6px}.m4 .stripe i{flex:1}
+.m4 .stripe .steam{background:var(--steam)}.m4 .stripe .epic{background:var(--epic)}.m4 .stripe .ubisoft{background:var(--ubi)}
+.m4 .notinst{border-style:dashed;box-shadow:none;background:transparent}.m4 .notinst .cover{filter:grayscale(1);opacity:.6}
+.m4 .ct{font-family:var(--f-disp);font-stretch:62%;font-weight:900;font-size:30px;line-height:.86;text-transform:uppercase;padding:12px;color:#fff;letter-spacing:-.01em}
+.m4 .sheet-wrap{position:fixed;inset:0;z-index:45;background:rgba(15,16,18,.45);display:flex;align-items:flex-end;justify-content:center;padding:16px}
+.m4 .sheet{background:var(--card);border:3px solid var(--fg);border-radius:22px;box-shadow:8px 8px 0 var(--fg);max-width:760px;width:100%;padding:20px;display:grid;grid-template-columns:200px minmax(0,1fr);gap:22px;margin-bottom:env(safe-area-inset-bottom,0px)}
+.m4 .sheet .cover{border:3px solid var(--fg);border-radius:12px}
+.m4 .sheet h2{font-family:var(--f-disp);font-stretch:62%;font-weight:900;font-size:clamp(38px,6vw,64px);line-height:.85;margin:0 0 14px;text-transform:uppercase}
+.m4 .sheet dl{display:grid;grid-template-columns:max-content 1fr;gap:6px 16px;font:400 12px var(--f-mono);margin:0 0 18px}
+.m4 .sheet dt{color:var(--dim);text-transform:uppercase}.m4 .sheet dd{margin:0}
+.m4 .sheet .x{float:right;border:2.5px solid var(--fg);border-radius:10px;width:36px;height:36px;font-weight:700}
+.m4 .play-main{background:var(--fg);color:var(--card);border:3px solid var(--fg);border-radius:12px 0 0 12px;padding:13px 24px;font:500 13px var(--f-mono);text-transform:uppercase;letter-spacing:.06em;box-shadow:4px 4px 0 var(--ubi)}
+.m4 .play-main.solo{border-radius:12px}
+.m4 .play-alt{background:var(--ubi);border:3px solid var(--fg);border-radius:0 12px 12px 0;padding:13px 14px;box-shadow:4px 4px 0 var(--fg)}
+.m4 .play-menu{background:var(--card);border:3px solid var(--fg);border-radius:12px;padding:4px;box-shadow:4px 4px 0 var(--fg)}
+.m4 .play-menu button{padding:8px 10px;font:12px var(--f-mono);border-radius:8px;text-transform:uppercase}.m4 .play-menu button:hover{background:var(--bg)}
+@media (max-width:600px){.m4 .sheet{grid-template-columns:1fr}.m4 .sheet .cover{width:140px}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="shell" role="tablist" aria-label="Melez yönler"><b>Hangar</b><div class="tabs" id="tabs"></div><div class="tab-note" id="note"></div></div>
+<div id="stage"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script>
+const GAMES=[
+ {t:"Elden Ring",p:["steam"],inst:true,size:"49 GB",last:"Dün",h:186},
+ {t:"Hades",p:["steam","epic"],inst:true,size:"15 GB",last:"3 gün önce",h:74},
+ {t:"Baldur's Gate 3",p:["steam"],inst:true,size:"122 GB",last:"1 hafta önce",h:212},
+ {t:"Alan Wake 2",p:["epic"],inst:true,size:"90 GB",last:"2 hafta önce",h:21},
+ {t:"Cyberpunk 2077",p:["steam","epic"],inst:true,size:"70 GB",last:"1 ay önce",h:143},
+ {t:"Control",p:["epic","steam"],inst:false,size:"—",last:"4 ay önce",h:18},
+ {t:"Hollow Knight",p:["steam"],inst:true,size:"9 GB",last:"2 ay önce",h:61},
+ {t:"Assassin's Creed Valhalla",p:["ubisoft"],inst:true,size:"160 GB",last:"5 ay önce",h:48},
+ {t:"Disco Elysium",p:["steam"],inst:false,size:"—",last:"1 yıl önce",h:32},
+ {t:"Death Stranding",p:["epic","steam"],inst:true,size:"80 GB",last:"3 hafta önce",h:55},
+ {t:"Celeste",p:["steam","epic"],inst:false,size:"—",last:"8 ay önce",h:14},
+ {t:"Red Dead Redemption 2",p:["steam"],inst:false,size:"—",last:"6 ay önce",h:97},
+ {t:"Rocket League",p:["epic"],inst:true,size:"25 GB",last:"5 gün önce",h:303},
+ {t:"Stardew Valley",p:["steam"],inst:true,size:"0.5 GB",last:"2 gün önce",h:120},
+ {t:"Sekiro",p:["steam"],inst:false,size:"—",last:"1 yıl önce",h:40},
+ {t:"Outer Wilds",p:["epic","steam"],inst:true,size:"8 GB",last:"1 hafta önce",h:25},
+];
+const PN={steam:"Steam",epic:"Epic",ubisoft:"Ubisoft"};
+const ORDER=["steam","epic","ubisoft"];
+GAMES.forEach((g,i)=>{g.id=i;g.p.sort((a,b)=>ORDER.indexOf(a)-ORDER.indexOf(b));g.pref=g.p[0];});
+const esc=s=>s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/'/g,"&#39;");
+function hue(s){let h=0;for(const c of s)h=(h*31+c.charCodeAt(0))%360;return h}
+function coverBg(g){const a=hue(g.t),b=(a+48)%360;
+  return `background:radial-gradient(120% 80% at 80% 10%,hsl(${b} 70% 60% / .9),transparent 60%),linear-gradient(160deg,hsl(${a} 55% 38%),hsl(${(a+200)%360} 45% 14%));`}
+const cover=(g,extra="")=>`<div class="cover" style="${coverBg(g)}${extra}"><span class="ct">${esc(g.t)}</span></div>`;
+function playBtn(g){
+  const verb=g.inst?"Oyna":"Kur";
+  const alts=g.p.length>1?`<button class="play-alt" aria-label="Platform seç" aria-haspopup="true" data-alt="${g.id}">▾</button>
+   <div class="play-menu" hidden>${g.p.map(p=>`<button data-pick="${g.id}:${p}">${verb} · ${PN[p]}${p===g.pref?" ✓":""}</button>`).join("")}</div>`:"";
+  return `<div class="play"><button data-run="${g.id}" class="play-main${g.p.length<2?" solo":""}">${verb} · ${PN[g.pref]}</button>${alts}</div>`;
+}
+let sel=0, filter="all", q="";
+const list=()=>GAMES.filter(g=>(filter==="all"||(filter==="inst"?g.inst:g.p.includes(filter)))&&g.t.toLowerCase().includes(q.toLowerCase()));
+const totalH=GAMES.reduce((s,g)=>s+g.h,0);
+const FL=[["all","Tümü"],["inst","Kurulu"],["steam","Steam"],["epic","Epic"],["ubisoft","Ubisoft"]];
+const cnt=k=>k==="all"?GAMES.length:k==="inst"?GAMES.filter(x=>x.inst).length:GAMES.filter(x=>x.p.includes(k)).length;
+const G=()=>GAMES[sel]||GAMES[0];
+const bars=g=>{const a=hue(g.t);return Array.from({length:12},(_,i)=>`<i class="${i===11?"now":""}" style="height:${15+((a*(i+3)*7)%85)}%"></i>`).join("")};
+
+function m1(){const g=G();
+ const card=x=>`<button class="card ${x.id===sel?"sel":""} ${x.inst?"":"notinst"}" data-sel="${x.id}"><div class="badges"><span class="pg">${x.p.map(p=>`<b>${p==="ubisoft"?"UBI":p.toUpperCase().slice(0,3)}</b>`).join("")}</span><span class="dot"></span></div>${cover(x)}<span class="cn">${esc(x.t)}</span></button>`;
+ return `<div class="m1"><aside><div class="logo"><i></i>Hangar</div>
+  <div class="grp"><h4>Kütüphane</h4>${FL.slice(0,2).map(([k,l])=>`<button class="${filter===k?"on":""}" data-f="${k}">${l}<span>${cnt(k)}</span></button>`).join("")}<button>Favoriler<span>4</span></button></div>
+  <div class="grp"><h4>Platformlar</h4>${FL.slice(2).map(([k,l])=>`<button class="${filter===k?"on":""}" data-f="${k}">${l}<span>${cnt(k)}</span></button>`).join("")}</div>
+  <div class="grp"><h4>Koleksiyonlar</h4><button>Soulslike<span>2</span></button><button>Kısa oyunlar<span>5</span></button></div></aside>
+ <main><section class="stage"><div class="bd" style="${coverBg(g)}"></div>
+  <div class="st-l" id="anim-detail"><span class="eb">${g.inst?"Hazır":"Kurulu değil"} · ${g.p.map(p=>PN[p]).join(" + ")}</span><h1>${esc(g.t)}</h1>
+   <div class="kv"><div><small>Oynama</small><b>${g.h} sa</b></div><div><small>Son</small><b>${g.last}</b></div><div><small>Boyut</small><b>${g.size}</b></div></div>
+   <div>${playBtn(g)}</div></div>${cover(g)}</section>
+  <div class="bar"><label class="s">⌕<input id="q" placeholder="Kütüphanede ara" value="${esc(q)}"><kbd>Ctrl K</kbd></label><button class="sort">Sırala: Son oynanan ▾</button></div>
+  <div class="grid">${list().map(card).join("")}</div></main></div>`}
+
+function m2(){const g=G();
+ const card=x=>`<button class="card ${x.id===sel?"sel":""} ${x.inst?"":"notinst"}" data-sel="${x.id}"><span class="dot"></span>${cover(x)}<span class="cn">${esc(x.t)}</span></button>`;
+ return `<div class="m2"><nav class="nav"><span class="logo">HANGAR</span><span class="sp"></span><input class="search" id="q" placeholder="Oyun ara" value="${esc(q)}"></nav>
+ <section class="hero"><div class="bd" style="${coverBg(g)}"></div>
+  <div class="hl" id="anim-detail"><span class="eyebrow">${g.inst?"Kaldığın yerden devam et":"Kütüphanende · kurulu değil"}</span><h1>${esc(g.t)}</h1><div>${playBtn(g)}</div></div>
+  <div class="hud"><h5>Oyun durumu</h5><div class="hkv"><div><small>Oynama</small><b>${g.h} sa</b></div><div><small>Son</small><b>${g.last}</b></div><div><small>Boyut</small><b>${g.size}</b></div><div><small>Durum</small><b>${g.inst?"Kurulu":"Yok"}</b></div></div>
+   <h5>Son 12 hafta</h5><div class="bars">${bars(g)}</div>
+   <h5>Platformlar</h5><div class="plats">${g.p.map(p=>`<div><span>${PN[p]}</span><em>${p===g.pref?"varsayılan":"alternatif"}</em></div>`).join("")}</div></div></section>
+ <div class="tools">${FL.map(([k,l])=>`<button class="pill ${filter===k?"on":""}" data-f="${k}">${l}<span>${cnt(k)}</span></button>`).join("")}</div>
+ <div class="grid">${list().map(card).join("")}</div></div>`}
+
+function m3(){const L=list();
+ const row=(g,i)=>`<button class="rowx ${g.inst?"":"off"}" data-sel="${g.id}"><span class="n">${String(i+1).padStart(2,"0")}</span><span class="t">${esc(g.t)}</span><span class="pls">${g.p.map(p=>`<span class="pl ${p}">${PN[p]}</span>`).join("")}</span><span>${g.inst?g.size:"kurulu değil"}</span><span>${g.h} sa</span></button>`;
+ const det=g=>`<div class="detail" id="anim-detail">${cover(g)}<div><h2>${esc(g.t)}</h2>
+   <table class="ptab"><tr><th>Platform</th><th>Durum</th><th>Son</th></tr>${g.p.map(p=>`<tr><td>${PN[p]}${p===g.pref?" · varsayılan":""}</td><td>${g.inst?"kurulu":"—"}</td><td>${g.last}</td></tr>`).join("")}</table>${playBtn(g)}</div></div>`;
+ return `<div class="m3"><div class="top"><span>Hangar / Kütüphane</span><span>Son tarama 21:45</span></div>
+  <div class="mast"><h1>Kütüphane</h1><div class="stats"><div><b>${GAMES.length}</b>oyun</div><div><b>${cnt("inst")}</b>kurulu</div><div><b>${totalH}</b>saat</div><div><b>3</b>platform</div></div></div>
+  <div class="filters">${FL.map(([k,l])=>`<button class="chip ${filter===k?"on":""}" data-f="${k}">${l}</button>`).join("")}<input id="q" placeholder="Ara…" value="${esc(q)}"></div>
+  <div class="list">${L.map((g,i)=>row(g,i)+(g.id===sel?det(g):"")).join("")}</div></div>`}
+
+let sheetOpen=false;
+function m4(){const g=G();
+ const card=(x,i)=>`<button class="card ${x.inst?"":"notinst"}" data-sel="${x.id}" data-open="1">${cover(x)}<span class="stripe">${x.p.map(p=>`<i class="${p}"></i>`).join("")}</span><span class="meta"><span class="no">${String(i+1).padStart(2,"0")}</span><span>${x.h} sa · ${x.last}</span><span class="pp">${x.p.map(p=>PN[p]).join(" / ")}</span></span></button>`;
+ return `<div class="m4"><header><span class="logo">Hangar</span><span class="greet">${GAMES.length} oyun · ${cnt("inst")} kurulu · son tarama 21:45</span><input class="search" id="q" placeholder="ARA…" value="${esc(q)}"></header>
+  <div class="chips">${FL.map(([k,l])=>`<button class="chip ${filter===k?"on":""}" data-f="${k}">${l}<span>${cnt(k)}</span></button>`).join("")}</div>
+  <div class="grid">${list().map(card).join("")}</div>
+  ${sheetOpen?`<div class="sheet-wrap" id="sw"><div class="sheet" role="dialog" aria-label="${esc(g.t)}">${cover(g)}<div><button class="x" data-close aria-label="Kapat">✕</button><h2>${esc(g.t)}</h2>
+   <dl><dt>Platform</dt><dd>${g.p.map(p=>PN[p]+(p===g.pref?" (varsayılan)":"")).join(", ")}</dd><dt>Durum</dt><dd>${g.inst?"Kurulu · "+g.size:"Kurulu değil"}</dd><dt>Süre</dt><dd>${g.h} saat</dd><dt>Son</dt><dd>${g.last}</dd></dl>${playBtn(g)}</div></div></div>`:""}</div>`}
+
+const V=[
+ {k:"kokpit-vitrin",n:"Kokpit + Vitrin",note:"Kokpit'in kenar çubuğu ve sık ızgarası; detay paneli yerine üstte, kapaktan türeyen ışıklı bir sahne.",r:m1},
+ {k:"vitrin-kokpit",n:"Vitrin + Kokpit",note:"Vitrin'in büyük sahnesi; sağda cam bir bilgi paneli (süre, oynama grafiği, platformlar) ve sayaçlı filtreler.",r:m2},
+ {k:"arsiv-kartus",n:"Arşiv + Kartuş",note:"Arşiv'in dev daraltılmış tipografisi ve listesi; satırlar Kartuş gibi kalın kenarlı, gölgeli, renkli platform etiketli.",r:m3},
+ {k:"kartus-arsiv",n:"Kartuş + Arşiv",note:"Kartuş'un eğilen kart ızgarası ve alttan açılan kartı; Arşiv'in daraltılmış başlıkları, numaraları ve tek-aralıklı yazısıyla.",r:m4},
+];
+let cur=0;try{const i=V.findIndex(v=>v.k===location.hash.slice(1));if(i>=0)cur=i}catch(e){}
+const RM=matchMedia("(prefers-reduced-motion: reduce)").matches;
+const stage=document.getElementById("stage");
+function tabs(){document.getElementById("tabs").innerHTML=V.map((v,i)=>`<button class="tab" role="tab" aria-selected="${i===cur}" data-tab="${i}"><span>${i+5}</span>${v.n}</button>`).join("");document.getElementById("note").textContent=V[cur].note}
+function render(anim){const fq=document.activeElement&&document.activeElement.id==="q";stage.innerHTML=V[cur].r();
+ if(fq){const i=document.getElementById("q");i.focus();i.setSelectionRange(i.value.length,i.value.length)}wire();
+ if(anim&&!RM&&window.gsap){gsap.from([".m1 .card",".m2 .hl > *, .m2 .hud, .m2 .card",".m3 h1, .m3 .stats > div, .m3 .rowx",".m4 .card"][cur],{y:18,opacity:0,duration:.55,ease:"power3.out",stagger:.025,clearProps:"all"})}}
+function toast(msg){const t=document.createElement("div");t.className="toast";t.textContent=msg;document.body.appendChild(t);
+ if(window.gsap&&!RM){gsap.from(t,{y:20,opacity:0,duration:.3});gsap.to(t,{opacity:0,y:10,delay:2,duration:.3,onComplete:()=>t.remove()})}else setTimeout(()=>t.remove(),2300)}
+function wire(){if(RM||!window.gsap)return;
+ if(cur===3){stage.querySelectorAll(".m4 .card").forEach(c=>{c.addEventListener("mousemove",e=>{const r=c.getBoundingClientRect();gsap.to(c,{rotateY:((e.clientX-r.left)/r.width-.5)*10,rotateX:-((e.clientY-r.top)/r.height-.5)*10,transformPerspective:700,duration:.3})});c.addEventListener("mouseleave",()=>gsap.to(c,{rotateX:0,rotateY:0,duration:.5,ease:"elastic.out(1,.5)"}))});
+  const s=document.querySelector(".m4 .sheet");if(s)gsap.from(s,{y:60,opacity:0,duration:.45,ease:"back.out(1.4)"})}
+ if(cur===2){stage.querySelectorAll(".m3 .rowx").forEach(r=>{r.addEventListener("mousedown",()=>gsap.to(r,{x:3,y:3,boxShadow:"1px 1px 0 #121614",duration:.08}))})}}
+document.addEventListener("input",e=>{if(e.target.id==="q"){q=e.target.value;render(false)}});
+document.addEventListener("click",e=>{const t=e.target.closest("button,a");if(!t)return;
+ if(t.dataset.tab!==undefined){cur=+t.dataset.tab;sheetOpen=false;try{history.replaceState(null,"","#"+V[cur].k)}catch(_){}tabs();render(true);window.scrollTo(0,0);return}
+ if(t.dataset.f){e.preventDefault();filter=t.dataset.f;render(true);return}
+ if(t.dataset.alt!==undefined){const m=t.nextElementSibling;m.hidden=!m.hidden;if(!m.hidden&&window.gsap&&!RM)gsap.from(m,{y:-6,opacity:0,duration:.18});return}
+ if(t.dataset.pick){const[id,p]=t.dataset.pick.split(":");GAMES[id].pref=p;render(false);toast(`${GAMES[id].t} bundan sonra ${PN[p]} üzerinden açılacak`);return}
+ if(t.dataset.run!==undefined){const g=GAMES[t.dataset.run];toast(g.inst?`${g.t} ${PN[g.pref]} üzerinden başlatılıyor…`:`${PN[g.pref]} kurulum için açılıyor…`);return}
+ if(t.dataset.close!==undefined){sheetOpen=false;render(false);return}
+ if(t.dataset.sel!==undefined){const id=+t.dataset.sel;if(cur===2&&sel===id){sel=-1;render(false);return}
+  sel=id;if(t.dataset.open)sheetOpen=true;render(false);
+  if(cur<2){window.scrollTo({top:0,behavior:RM?"auto":"smooth"})}
+  if(window.gsap&&!RM&&cur!==3){const d=document.getElementById("anim-detail");if(d)gsap.from(d.children.length&&cur<2?d.children:d,{y:14,opacity:0,stagger:.05,duration:.45,ease:"power3.out"})}}});
+document.addEventListener("click",e=>{if(e.target.id==="sw"){sheetOpen=false;render(false)}});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&sheetOpen){sheetOpen=false;render(false)}});
+window.addEventListener("hashchange",()=>{const i=V.findIndex(v=>v.k===location.hash.slice(1));if(i>=0&&i!==cur){cur=i;tabs();render(true)}});
+tabs();render(true);
+</script>

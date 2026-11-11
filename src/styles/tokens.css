@@ -1,0 +1,15 @@
+:root {
+  --bg: #0f1318;
+  --panel: #151a21;
+  --raise: #1d242e;
+  --line: #252d38;
+  --fg: #e8ebf0;
+  --dim: #8892a0;
+  --accent: #f2a93b;
+  --accent-alt: #d6922c;
+  --on-accent: #1a1205;
+  --installed: #4fd18b;
+  --f-disp: "Chakra Petch", sans-serif;
+  --f-body: "Figtree", system-ui, sans-serif;
+  color-scheme: dark;
+}
