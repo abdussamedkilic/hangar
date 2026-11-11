@@ -85,7 +85,9 @@ pub fn group(
     let mut seen: std::collections::HashSet<(&str, Platform)> = Default::default();
     let mut dup = vec![false; entries.len()];
     for &i in &order {
-        dup[i] = !seen.insert((norms[i].as_str(), entries[i].platform));
+        // Local entries are never auto-merged: treated like a dup so they keep their own key.
+        dup[i] = entries[i].platform == Platform::Local
+            || !seen.insert((norms[i].as_str(), entries[i].platform));
     }
     let eff: Vec<String> = (0..entries.len())
         .map(|i| {
@@ -178,6 +180,7 @@ mod tests {
             playtime_min: None,
             launch_uri: String::new(),
             install_uri: None,
+            launch_args: vec![],
         }
     }
 
@@ -272,6 +275,29 @@ mod tests {
             merged: true,
         };
         assert_eq!(group(es(), &[o]).len(), 1);
+    }
+
+    #[test]
+    fn local_never_auto_merges() {
+        let g = group(
+            vec![e(Platform::Steam, "1", "Hades"), e(Platform::Local, "l1", "Hades")],
+            &[],
+        );
+        assert_eq!(g.len(), 2);
+    }
+
+    #[test]
+    fn local_merges_with_explicit_override() {
+        let o = Override {
+            a: (Platform::Steam, "1".into()),
+            b: (Platform::Local, "l1".into()),
+            merged: true,
+        };
+        let g = group(
+            vec![e(Platform::Steam, "1", "Hades"), e(Platform::Local, "l1", "Hades")],
+            &[o],
+        );
+        assert_eq!(g.len(), 1);
     }
 
     #[test]

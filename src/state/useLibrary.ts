@@ -28,6 +28,8 @@ export function useLibrary() {
     }
   }, []);
 
+  const applyReport = useCallback((r: { warnings: string[] }) => setWarnings(r.warnings), []);
+
   useEffect(() => {
     mounted.current = true;
     let alive = true;
@@ -66,5 +68,5 @@ export function useLibrary() {
     };
   }, [rescan]);
 
-  return { games, selectedId, select, filter, setFilter, query, setQuery, sort, setSort, warnings, rescanning, loaded, rescan };
+  return { games, selectedId, select, filter, setFilter, query, setQuery, sort, setSort, warnings, rescanning, loaded, rescan, applyReport };
 }

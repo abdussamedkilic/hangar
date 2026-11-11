@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Game, Platform } from "../lib/api";
 import { defaultPlatform } from "../lib/library";
 
-export const PLATFORM_NAME: Record<Platform, string> = { steam: "Steam", epic: "Epic", ubisoft: "Ubisoft" };
+export const PLATFORM_NAME: Record<Platform, string> = { steam: "Steam", epic: "Epic", ubisoft: "Ubisoft", gog: "GOG", riot: "Riot", local: "Yerel" };
 
 interface Props {
   game: Game;

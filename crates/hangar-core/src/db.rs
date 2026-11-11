@@ -4,6 +4,15 @@ use rusqlite::{params, Connection, OptionalExtension, Result};
 use std::collections::HashMap;
 use std::path::Path;
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct LocalGame {
+    pub id: i64,
+    pub title: String,
+    pub exe_path: String,
+    pub args: Vec<String>,
+    pub source: String,
+}
+
 pub struct Db {
     conn: Connection,
 }
@@ -47,7 +56,14 @@ impl Db {
              CREATE TABLE IF NOT EXISTS merge_overrides(
                 a_platform TEXT NOT NULL, a_id TEXT NOT NULL,
                 b_platform TEXT NOT NULL, b_id TEXT NOT NULL,
-                merged INTEGER NOT NULL);",
+                merged INTEGER NOT NULL);
+             CREATE TABLE IF NOT EXISTS local_games(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                exe_path TEXT NOT NULL,
+                args TEXT NOT NULL DEFAULT '[]',
+                source TEXT NOT NULL,
+                added_at INTEGER NOT NULL);",
         )?;
         Ok(Db { conn })
     }
@@ -169,6 +185,65 @@ impl Db {
         Ok(())
     }
 
+    pub fn add_local_game(&self, title: &str, exe: &str, source: &str) -> Result<i64> {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0);
+        self.conn.execute(
+            "INSERT INTO local_games(title, exe_path, source, added_at) VALUES(?1, ?2, ?3, ?4)",
+            params![title, exe, source, now],
+        )?;
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    /// Inserts all items in one transaction: either every row is added or none.
+    pub fn add_local_games(&self, items: &[(String, String)], source: &str) -> Result<()> {
+        let tx = self.conn.unchecked_transaction()?;
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0);
+        for (title, exe) in items {
+            tx.execute(
+                "INSERT INTO local_games(title, exe_path, source, added_at) VALUES(?1, ?2, ?3, ?4)",
+                params![title, exe, source, now],
+            )?;
+        }
+        tx.commit()
+    }
+
+    pub fn update_local_game(&self, id: i64, title: &str, exe: &str) -> Result<()> {
+        self.conn.execute(
+            "UPDATE local_games SET title = ?1, exe_path = ?2 WHERE id = ?3",
+            params![title, exe, id],
+        )?;
+        Ok(())
+    }
+
+    pub fn remove_local_game(&self, id: i64) -> Result<()> {
+        self.conn
+            .execute("DELETE FROM local_games WHERE id = ?1", [id])?;
+        Ok(())
+    }
+
+    pub fn local_games(&self) -> Result<Vec<LocalGame>> {
+        let mut st = self
+            .conn
+            .prepare("SELECT id, title, exe_path, args, source FROM local_games ORDER BY id")?;
+        let rows = st.query_map([], |r| {
+            let args: String = r.get(3)?;
+            Ok(LocalGame {
+                id: r.get(0)?,
+                title: r.get(1)?,
+                exe_path: r.get(2)?,
+                args: serde_json::from_str(&args).unwrap_or_default(),
+                source: r.get(4)?,
+            })
+        })?;
+        rows.collect()
+    }
+
     pub fn overrides(&self) -> Result<Vec<Override>> {
         let mut st = self.conn.prepare(
             "SELECT a_platform, a_id, b_platform, b_id, merged FROM merge_overrides ORDER BY rowid",
@@ -220,5 +295,53 @@ impl Db {
             )?;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn local_game_round_trip() {
+        let db = Db::open_in_memory().unwrap();
+        assert!(db.local_games().unwrap().is_empty());
+        let id = db.add_local_game("Hades", r"C:\Games\Hades\Hades.exe", "manual").unwrap();
+        let list = db.local_games().unwrap();
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].id, id);
+        assert_eq!(list[0].title, "Hades");
+        assert_eq!(list[0].exe_path, r"C:\Games\Hades\Hades.exe");
+        assert_eq!(list[0].source, "manual");
+        assert!(list[0].args.is_empty());
+        db.update_local_game(id, "Hades II", r"D:\Hades2.exe").unwrap();
+        let list = db.local_games().unwrap();
+        assert_eq!((list[0].title.as_str(), list[0].exe_path.as_str()), ("Hades II", r"D:\Hades2.exe"));
+        db.remove_local_game(id).unwrap();
+        assert!(db.local_games().unwrap().is_empty());
+    }
+
+    #[test]
+    fn local_games_survive_replace_entries() {
+        let db = Db::open_in_memory().unwrap();
+        db.add_local_game("Hades", "a.exe", "manual").unwrap();
+        db.replace_entries(vec![]).unwrap();
+        assert_eq!(db.local_games().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn add_local_games_is_all_or_nothing() {
+        let db = Db::open_in_memory().unwrap();
+        db.conn
+            .execute_batch(
+                "CREATE TRIGGER no_empty BEFORE INSERT ON local_games WHEN NEW.title = ''
+                 BEGIN SELECT RAISE(ABORT, 'bad'); END;",
+            )
+            .unwrap();
+        let bad = vec![("A".to_string(), "a.exe".to_string()), (String::new(), "b.exe".to_string())];
+        assert!(db.add_local_games(&bad, "scan").is_err());
+        assert!(db.local_games().unwrap().is_empty());
+        db.add_local_games(&bad[..1], "scan").unwrap();
+        assert_eq!(db.local_games().unwrap().len(), 1);
     }
 }

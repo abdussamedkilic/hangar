@@ -66,6 +66,6 @@ describe("defaultPlatform / isInstalled / counts", () => {
   });
   it("counts includes zero platforms", () => {
     const gs = [game("a", [entry("steam", { installed: true })]), game("b", [entry("steam"), entry("epic")])];
-    expect(counts(gs)).toEqual({ all: 2, installed: 1, steam: 2, epic: 1, ubisoft: 0 });
+    expect(counts(gs)).toEqual({ all: 2, installed: 1, steam: 2, epic: 1, ubisoft: 0, gog: 0, riot: 0, local: 0 });
   });
 });

@@ -2,6 +2,9 @@ use crate::model::{Platform, PlatformEntry};
 use std::fmt;
 
 pub mod epic;
+pub mod gog;
+pub mod local;
+pub mod riot;
 pub mod steam;
 pub mod ubisoft;
 

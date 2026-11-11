@@ -2,6 +2,7 @@ use crate::db::Db;
 use crate::merge::group;
 use crate::model::{Game, Platform, PlatformEntry};
 use crate::providers::{LibraryProvider, ProviderError};
+use std::path::PathBuf;
 
 pub struct ScanReport {
     pub games: usize,
@@ -44,6 +45,21 @@ pub fn scan_all(
     let games = groups.len();
     db.replace_entries(groups)?;
     Ok(ScanReport { games, warnings })
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum LaunchTarget {
+    Uri(String),
+    Exe { path: PathBuf, args: Vec<String> },
+}
+
+/// A launch string containing `://` is a URI; anything else is an exe path.
+pub fn launch_target(entry: &PlatformEntry, launch: &str) -> LaunchTarget {
+    if launch.contains("://") {
+        LaunchTarget::Uri(launch.to_string())
+    } else {
+        LaunchTarget::Exe { path: PathBuf::from(launch), args: entry.launch_args.clone() }
+    }
 }
 
 pub fn resolve(game: &Game, want: Option<Platform>) -> Option<(&PlatformEntry, String)> {
@@ -92,11 +108,47 @@ mod tests {
             playtime_min: None,
             launch_uri: format!("launch:{id}"),
             install_uri: Some(format!("install:{id}")),
+            launch_args: vec![],
         }
     }
 
     fn fake(p: Platform, v: Vec<PlatformEntry>) -> Box<dyn LibraryProvider> {
         Box::new(Fake(p, Ok(v)))
+    }
+
+    #[test]
+    fn uri_vs_exe() {
+        let e = entry(Platform::Steam, "1", "Hades", true);
+        assert_eq!(
+            launch_target(&e, "steam://rungameid/1"),
+            LaunchTarget::Uri("steam://rungameid/1".into())
+        );
+        let e = PlatformEntry { launch_args: vec!["--x".into()], ..e };
+        assert_eq!(
+            launch_target(&e, r"C:\Oyunlar\Şehir Yapımı\game.exe"),
+            LaunchTarget::Exe {
+                path: r"C:\Oyunlar\Şehir Yapımı\game.exe".into(),
+                args: vec!["--x".into()]
+            }
+        );
+    }
+
+    #[test]
+    fn steam_default_on_merged_card() {
+        let g = Game {
+            id: 1,
+            title: "Hades".into(),
+            norm_title: "hades".into(),
+            cover_path: None,
+            preferred: None,
+            last_launched: None,
+            entries: vec![
+                entry(Platform::Riot, "r", "Hades", true),
+                entry(Platform::Steam, "1", "Hades", true),
+                entry(Platform::Local, "l", "Hades", true),
+            ],
+        };
+        assert_eq!(resolve(&g, None).unwrap().0.platform, Platform::Steam);
     }
 
     #[test]
@@ -246,6 +298,25 @@ mod tests {
         assert_eq!(db.games().unwrap().len(), 2);
         scan_all(&db, &provs, None).unwrap();
         assert_eq!(db.games().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn local_provider_rescan_is_stable() {
+        use crate::db::LocalGame;
+        use crate::providers::local::LocalProvider;
+        let db = Db::open_in_memory().unwrap();
+        let provs: Vec<Box<dyn LibraryProvider>> = vec![Box::new(LocalProvider::new(vec![LocalGame {
+            id: 1,
+            title: "Hades".into(),
+            exe_path: "x.exe".into(),
+            args: vec![],
+            source: "manual".into(),
+        }]))];
+        assert_eq!(scan_all(&db, &provs, None).unwrap().games, 1);
+        assert_eq!(scan_all(&db, &provs, None).unwrap().games, 1);
+        let games = db.games().unwrap();
+        assert_eq!(games.len(), 1);
+        assert_eq!(games[0].entries.len(), 1);
     }
 
     #[test]

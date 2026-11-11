@@ -6,17 +6,30 @@ pub enum Platform {
     Steam,
     Epic,
     Ubisoft,
+    Gog,
+    Riot,
+    Local,
 }
 
 impl Platform {
     /// Priority order.
-    pub const ALL: [Platform; 3] = [Platform::Steam, Platform::Epic, Platform::Ubisoft];
+    pub const ALL: [Platform; 6] = [
+        Platform::Steam,
+        Platform::Epic,
+        Platform::Ubisoft,
+        Platform::Gog,
+        Platform::Riot,
+        Platform::Local,
+    ];
 
     pub fn as_str(&self) -> &'static str {
         match self {
             Platform::Steam => "steam",
             Platform::Epic => "epic",
             Platform::Ubisoft => "ubisoft",
+            Platform::Gog => "gog",
+            Platform::Riot => "riot",
+            Platform::Local => "local",
         }
     }
 }
@@ -34,6 +47,9 @@ pub struct PlatformEntry {
     pub playtime_min: Option<u32>,
     pub launch_uri: String,
     pub install_uri: Option<String>,
+    /// Extra arguments when `launch_uri` is an exe path.
+    #[serde(default)]
+    pub launch_args: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -45,4 +61,22 @@ pub struct Game {
     pub preferred: Option<Platform>,
     pub last_launched: Option<i64>,
     pub entries: Vec<PlatformEntry>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn platform_priority() {
+        use Platform::*;
+        assert_eq!(Platform::ALL, [Steam, Epic, Ubisoft, Gog, Riot, Local]);
+    }
+
+    #[test]
+    fn old_json_without_launch_args_still_loads() {
+        let j = r#"{"platform":"steam","platform_id":"1","title":"Hades","installed":true,"install_path":null,"size_bytes":null,"last_played":null,"playtime_min":null,"launch_uri":"steam://rungameid/1","install_uri":null}"#;
+        let e: PlatformEntry = serde_json::from_str(j).unwrap();
+        assert!(e.launch_args.is_empty());
+    }
 }

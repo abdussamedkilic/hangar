@@ -108,6 +108,7 @@ pub fn parse_manifest(src: &str) -> Option<PlatformEntry> {
         playtime_min: None,
         launch_uri: format!("steam://rungameid/{appid}"),
         install_uri: Some(format!("steam://install/{appid}")),
+        launch_args: vec![],
     })
 }
 
@@ -150,6 +151,7 @@ pub fn parse_owned_games(json: &str) -> Result<Vec<PlatformEntry>, ProviderError
                 playtime_min: g["playtime_forever"].as_u64().map(|m| m as u32),
                 launch_uri: format!("steam://rungameid/{appid}"),
                 install_uri: Some(format!("steam://install/{appid}")),
+                launch_args: vec![],
             })
         })
         .collect())

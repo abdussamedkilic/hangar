@@ -4,7 +4,7 @@ export type { Game, Platform, PlatformEntry } from "./api";
 export type Filter = "all" | "installed" | Platform;
 export type Sort = "recent" | "title" | "playtime";
 
-const PLATFORMS: Platform[] = ["steam", "epic", "ubisoft"];
+const PLATFORMS: Platform[] = ["steam", "epic", "ubisoft", "gog", "riot", "local"];
 const SUFFIXES = [
   "ultimate edition", "definitive edition", "game of the year edition", "goty",
   "deluxe edition", "complete edition", "remastered", "director's cut",
@@ -73,7 +73,7 @@ export function view(games: Game[], f: Filter, q: string, s: Sort): Game[] {
 }
 
 export function counts(games: Game[]): Record<Filter, number> {
-  const c: Record<Filter, number> = { all: games.length, installed: games.filter(isInstalled).length, steam: 0, epic: 0, ubisoft: 0 };
+  const c: Record<Filter, number> = { all: games.length, installed: games.filter(isInstalled).length, steam: 0, epic: 0, ubisoft: 0, gog: 0, riot: 0, local: 0 };
   for (const g of games) for (const p of PLATFORMS) if (g.entries.some((e) => e.platform === p)) c[p]++;
   return c;
 }

@@ -3,22 +3,28 @@
 Steam, Epic ve Ubisoft oyunlarını tek kütüphanede birleştiren Windows masaüstü uygulaması. Kullanıcı: kullanıcı (Türkçe konuşur, Windows 11 Türkçe sistem, kullanıcı klasörü `C:\Users\user`, repo `C:\Users\user\workdir\hangar`).
 
 ## Durum (2026-11-09, ilk gerçek çalıştırma sonrası)
-- v1 kodu `feat/v1` dalında (GitHub: <owner>/hangar). `main` sadece tasarım+plan belgeleri.
+- v1 `main`'de (PR #1 squash ile merge edildi, 2026-11-11; GitHub: <owner>/hangar). Yeni işler `main`'den yeni dalda.
 - `npm run tauri dev` Windows'ta açıldı: Steam (DAVE THE DIVER, Watch_Dogs), Epic (Death's Door), Ubisoft (Watch_Dogs → Steam ile birleşti) doğru geldi, kapaklar indi.
 - Düzeltildi: Ayarlar'a SteamID yerine kullanıcı adı (`player`) girilince GetOwnedGames sessizce başarısızdı → `steam::is_steamid64`; 17 haneli değilse `loginusers.vdf`'ten alınır.
+- 2026-11-11: `feat/step1` dalında Riot/klasör taraması/elle ekleme/GOG eklendi (GOG doğrulanmadı); PR kullanıcı kontrolünden sonra.
 - Not: `localhost:1420` tarayıcıda çalışmaz (Tauri `invoke` yok) — yalnızca Tauri penceresinde test edilir.
 
 ## Sıradaki görevler (sırayla, adım adım)
 1. ✅ (2026-11-11) Kurulu olmayan Steam oyunları API ile geliyor.
 2. ✅ (2026-11-11) Oyna: Steam, Epic, Ubisoft hepsi açıldı. (Ubisoft Connect bir kez "initializing"de takıldı — Connect kaynaklı; Hangar her tıkta `uplay://` açar, kilit yok ama geri bildirim de yok.)
 3. ✅ (2026-11-11) Uyarılar üstteki `notice` satırında görünüyor; Ayarlar'dan taramanın uyarıları kayboluyordu → diyalog artık App'in `rescan`'ini çağırıyor.
-4. Her şey çalışınca `feat/v1` → `main` PR.
-5. Sonra "Bilinen küçük açıklar" listesi.
+4. ✅ (2026-11-11) PR #1 squash ile `main`'e alındı.
+5. ✅ (2026-11-11) Adım 1 (`feat/step1`): Oyun ekle (elle ekleme), Riot sağlayıcısı (League of Legends, TFT), seçili klasörlerde oyun önerisi taraması, GOG sağlayıcısı. Kullanıcının elle kontrolü bekliyor; sonra `main`'e PR.
+   - GOG **doğrulanmadı** — gerçek bir GOG oyunuyla denenmedi (bu PC'de Galaxy var, oyun yok; kayıt defteri `GOG.com\Games`).
+   - Kullanıcı denedi (2026-11-11): Riot/LoL açılıyor, TFT bulunuyor, Watch_Dogs (Steam) Ubisoft Connect üzerinden açılıyor (normal).
+   - Ek (aynı dal): GOG Galaxy yerel DB'sinden (`C:\ProgramData\GOG.com\Galaxy\storage\galaxy-2.0.db`, salt okuma) kurulu olmayan GOG oyunları (bu PC'de 161); karttan "Kapak seç…"; oyunlar artık Hangar'ın alt süreci olarak başlamıyor (PowerShell `Start-Process`, değerler env ile) — `tauri dev` yeniden başlatması LoL'u öldürüyordu.
+   - Riot ikonundan kapak kodu var ama bu PC'deki LoL `.ico` PNG çerçevesi içermiyor → kapak "Kapak seç…" ile elle.
+   - Epic'te kurulu olmayan oyunlar yok: güvenilir yerel liste yok, hesap girişi gerekiyor (ayrı tasarım).
+6. Sonra "Bilinen küçük açıklar" listesi.
 
 ## v1.1 fikirleri (kullanıcıdan, 2026-11-11 — henüz tasarlanmadı, önce brainstorming)
 - "Oyna" sonrası geri bildirim/durum (ör. "Ubisoft Connect'e gönderildi", tekrar dene).
-- Yeni sağlayıcı: kendi istemcisi olan oyunlar, ilk örnek Riot/League of Legends (`C:\ProgramData\Riot Games\` meta dosyaları).
-- Tanınmayan oyunlar için elle ekleme (exe yolu + ad).
+- (Yapıldı: Riot sağlayıcısı, elle ekleme, GOG — yukarıda adım 5.)
 - NVIDIA app'in oyun taramasını örnek almak (rea-skill) — yerel dosyalardan okumak kırılgan; önce kendi sağlayıcılarımız.
 
 ## Belgeler
@@ -42,6 +48,9 @@ Steam, Epic ve Ubisoft oyunlarını tek kütüphanede birleştiren Windows masa�
 - Alt ajanlar: Sonnet, aynı anda en fazla 2-3.
 - UI işleri için skill'ler: taste-skill, unslop, ui-ux-pro-max, gsap-*; hepsi `~/.claude/skills` altında kurulu (Windows ve WSL).
 - Commit mesajları Türkçe conventional (`feat(core): ...`).
+
+## Bilinen küçük açıklar (Step 1 incelemelerinden, ertelendi)
+UAC iptali dışında yükseltilmiş başlatma hataları sınırlı bildiriliyor; başlatma betiği `"`'den önceki `\`'yi çiftlemiyor (bugün argümanlar bunu içermiyor); "Kaldır" onay sormuyor; kenar çubuğunda aktif filtrenin satırı sayı 0 olunca kayboluyor; tarama hariç tutması `*crash*` "Crash Bandicoot"u da eler, `unins` önek değil içerir eşleşmesi; bozuk `scan_folders` JSON sessizce boş liste; Riot PBE fixture'ı kullanılmıyor; boş durum metni yeni kaynakları ve "Oyun ekle"yi anmıyor; eksik exe'li yerel kart "Kur · Yerel" diyor; `tauri dev` açıkken Rust düzenlemek uygulamayı yeniden başlatır (oyunlar artık etkilenmez).
 
 ## Bilinen küçük açıklar (v1 sonrası)
 Sağ tık menüsü pencere kenarına taşabiliyor; ayarlar penceresinde tam odak tuzağı yok; README'de SteamID notu eksik; Ayarlar'da getSettings iki kez başarısız olursa geri bildirim yok; npm audit 6 açık (hepsi geliştirme araçlarında: vite/esbuild/jsdom zinciri, yerel kullanımda risk yok).

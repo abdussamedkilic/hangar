@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { open } from "@tauri-apps/plugin-dialog";
 import { api, type Game, type Platform, type Settings } from "./lib/api";
 import { counts, view } from "./lib/library";
 import { useLibrary } from "./state/useLibrary";
@@ -8,17 +9,19 @@ import SearchBar from "./components/SearchBar";
 import GameGrid from "./components/GameGrid";
 import SettingsDialog from "./components/SettingsDialog";
 import MergePicker from "./components/MergePicker";
+import AddGameDialog from "./components/AddGameDialog";
 import ContextMenu from "./components/ContextMenu";
 
 export default function App() {
   const lib = useLibrary();
-  const { games, selectedId, select, filter, setFilter, query, setQuery, sort, setSort, warnings, rescanning, loaded, rescan } = lib;
+  const { games, selectedId, select, filter, setFilter, query, setQuery, sort, setSort, warnings, rescanning, loaded, rescan, applyReport } = lib;
   const [prefs, setPrefs] = useState<Record<number, Platform>>({});
   const [error, setError] = useState<string | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [ctx, setCtx] = useState<{ game: Game; x: number; y: number } | null>(null);
   const [mergeFor, setMergeFor] = useState<Game | null>(null);
+  const [localDlg, setLocalDlg] = useState<{ id: number; title: string; exe: string } | "new" | null>(null);
 
   const loadSettings = useCallback(() => {
     Promise.resolve()
@@ -30,6 +33,7 @@ export default function App() {
   const closeSettings = useCallback(() => setShowSettings(false), []);
   const closeCtx = useCallback(() => setCtx(null), []);
   const closeMerge = useCallback(() => setMergeFor(null), []);
+  const closeLocal = useCallback(() => setLocalDlg(null), []);
 
   const visible = useMemo(() => view(games, filter, query, sort), [games, filter, query, sort]);
   const selected = visible.find((g) => g.id === selectedId) ?? visible[0] ?? null;
@@ -72,6 +76,29 @@ export default function App() {
       setError(String(e));
     }
   };
+  const editLocal = (g: Game) => {
+    const e = g.entries.find((x) => x.platform === "local");
+    if (e) setLocalDlg({ id: Number(e.platform_id), title: e.title, exe: e.launch_uri });
+  };
+  const removeLocal = async (g: Game) => {
+    const e = g.entries.find((x) => x.platform === "local");
+    if (!e) return;
+    setError(null);
+    try {
+      applyReport(await api.removeLocalGame(Number(e.platform_id)));
+    } catch (err) {
+      setError(String(err));
+    }
+  };
+  const pickCover = async (g: Game) => {
+    setError(null);
+    try {
+      const f = await open({ filters: [{ name: "Görsel", extensions: ["png", "jpg", "jpeg"] }] });
+      if (typeof f === "string") await api.setCover(g.id, f);
+    } catch (e) {
+      setError(String(e));
+    }
+  };
   const openSettings = () => {
     if (settings === null) loadSettings();
     setShowSettings(true);
@@ -82,10 +109,10 @@ export default function App() {
 
   return (
     <div className="app">
-      <Sidebar filter={filter} counts={counts(games)} onFilter={setFilter} onSettings={openSettings} onRescan={rescan} rescanning={rescanning} />
+      <Sidebar filter={filter} counts={counts(games)} onFilter={setFilter} onSettings={openSettings} onRescan={rescan} onAdd={() => setLocalDlg("new")} rescanning={rescanning} />
       <main>
         {rescanning && <span className="scan" role="status">Taranıyor…</span>}
-        <Stage game={game} onLaunch={launch} onChoose={choose} onSplit={split} />
+        <Stage game={game} onLaunch={launch} onChoose={choose} onSplit={split} onEdit={editLocal} onRemove={removeLocal} />
         {notice && <p className="notice">{notice}</p>}
         <SearchBar query={query} onQuery={setQuery} sort={sort} onSort={setSort} />
         {empty ? (
@@ -104,8 +131,9 @@ export default function App() {
           />
         )}
       </main>
-      {showSettings && settings !== null && <SettingsDialog settings={settings} onSaved={async () => { loadSettings(); await rescan(); }} onClose={closeSettings} />}
-      {ctx && <ContextMenu x={ctx.x} y={ctx.y} onClose={closeCtx} items={[{ label: "Şununla birleştir…", onSelect: () => setMergeFor(ctx.game) }]} />}
+      {showSettings && settings !== null && <SettingsDialog settings={settings} onScanned={applyReport} onSaved={async () => { loadSettings(); await rescan(); }} onClose={closeSettings} />}
+      {localDlg && <AddGameDialog edit={localDlg === "new" ? undefined : localDlg} onDone={applyReport} onClose={closeLocal} />}
+      {ctx && <ContextMenu x={ctx.x} y={ctx.y} onClose={closeCtx} items={[{ label: "Şununla birleştir…", onSelect: () => setMergeFor(ctx.game) }, { label: "Kapak seç…", onSelect: () => void pickCover(ctx.game) }]} />}
       {mergeFor && <MergePicker source={mergeFor} games={games} onPick={(g) => merge(mergeFor, g)} onClose={closeMerge} />}
     </div>
   );

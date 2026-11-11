@@ -1,6 +1,7 @@
 pub mod artwork;
 pub mod db;
 pub mod library;
+pub mod local_scan;
 pub mod merge;
 pub mod model;
 pub mod providers;

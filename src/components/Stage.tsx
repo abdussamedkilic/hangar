@@ -42,9 +42,11 @@ interface Props {
   onLaunch: (p: Platform) => void;
   onChoose: (p: Platform) => void;
   onSplit?: (g: Game) => void;
+  onEdit?: (g: Game) => void;
+  onRemove?: (g: Game) => void;
 }
 
-export default function Stage({ game, onLaunch, onChoose, onSplit }: Props) {
+export default function Stage({ game, onLaunch, onChoose, onSplit, onEdit, onRemove }: Props) {
   const [more, setMore] = useState(false);
   const root = useRef<HTMLElement>(null);
   const [bd, setBd] = useState<{ cur: Game | null; prev: Game | null }>({ cur: game, prev: null });
@@ -72,6 +74,8 @@ export default function Stage({ game, onLaunch, onChoose, onSplit }: Props) {
   const installedEntries = game.entries.filter((e) => e.installed);
   const playtime = game.entries.reduce((s, e) => s + (e.playtime_min ?? 0), 0);
   const last = Math.max(0, game.last_launched ?? 0, ...game.entries.map((e) => e.last_played ?? 0)) || null;
+  const canSplit = game.entries.length >= 2 && !!onSplit;
+  const canEdit = game.entries.some((e) => e.platform === "local") && !!onEdit && !!onRemove;
   const size = installedEntries.reduce((s, e) => s + (e.size_bytes ?? 0), 0);
 
   return (
@@ -95,12 +99,14 @@ export default function Stage({ game, onLaunch, onChoose, onSplit }: Props) {
         </div>
         <div className="acts-row">
           <PlayButton game={game} onLaunch={onLaunch} onChoose={onChoose} />
-          {game.entries.length >= 2 && onSplit && (
+          {(canSplit || canEdit) && (
             <div className="more">
               <button className="more-btn" aria-label="Diğer işlemler" aria-haspopup="menu" aria-expanded={more} onClick={() => setMore((o) => !o)}>⋯</button>
               {more && (
                 <div className="play-menu" role="menu">
-                  <button role="menuitem" onClick={() => { setMore(false); onSplit(game); }}>Bu kayıtları ayır</button>
+                  {canSplit && <button role="menuitem" onClick={() => { setMore(false); onSplit!(game); }}>Bu kayıtları ayır</button>}
+                  {canEdit && <button role="menuitem" onClick={() => { setMore(false); onEdit!(game); }}>Düzenle</button>}
+                  {canEdit && <button role="menuitem" onClick={() => { setMore(false); onRemove!(game); }}>Kaldır</button>}
                 </div>
               )}
             </div>

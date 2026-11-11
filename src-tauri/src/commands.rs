@@ -1,9 +1,13 @@
 use hangar_core::artwork::ensure_cover;
 use hangar_core::db::Db;
-use hangar_core::library::{resolve, scan_all};
+use hangar_core::library::{launch_target, resolve, scan_all, LaunchTarget};
+use hangar_core::local_scan::{candidates as local_candidates, Candidate};
 use hangar_core::merge::Override;
 use hangar_core::model::{Game, Platform};
 use hangar_core::providers::epic::EpicProvider;
+use hangar_core::providers::gog::GogProvider;
+use hangar_core::providers::local::LocalProvider;
+use hangar_core::providers::riot::RiotProvider;
 use hangar_core::providers::steam::{self, SteamProvider};
 use hangar_core::providers::ubisoft::UbisoftProvider;
 use hangar_core::providers::LibraryProvider;
@@ -83,7 +87,14 @@ fn scan(app: &AppHandle) -> Result<ScanReport, String> {
     if let Some(p) = UbisoftProvider::detect() {
         providers.push(Box::new(p));
     }
+    if let Some(p) = RiotProvider::detect() {
+        providers.push(Box::new(p));
+    }
+    if let Some(p) = GogProvider::detect() {
+        providers.push(Box::new(p));
+    }
     let g = db.lock().map_err(|_| "Veritabanı kilitlendi".to_string())?;
+    providers.push(Box::new(LocalProvider::new(g.local_games().map_err(dberr)?)));
     let mut r = scan_all(&g, &providers, owned).map_err(dberr)?;
     r.warnings.extend(extra);
     let games = g.games().map_err(dberr)?;
@@ -109,7 +120,7 @@ fn fetch_covers(app: AppHandle) {
             if let Ok(db) = Db::open(&db_path) {
                 if let Ok(games) = db.games() {
                     for game in games.iter().filter(|g| g.cover_path.is_none()) {
-                        if let Some(path) = ensure_cover(&db, &dir, game, steam_root.as_deref()) {
+                        if let Some(path) = ensure_cover(&db, &dir, game, steam_root.as_deref(), Some(std::path::Path::new(hangar_core::providers::riot::DEFAULT_ROOT))) {
                             let _ = app.emit("cover-ready", serde_json::json!({ "id": game.id, "path": path }));
                         }
                     }
@@ -148,20 +159,77 @@ pub async fn rescan(app: AppHandle) -> Result<ScanReport, String> {
     rescan_inner(app).await
 }
 
+/// Fixed script: values reach PowerShell only through the env vars returned by
+/// `launch_env`, never through the script text. No `-Verb RunAs`: ShellExecute
+/// shows the UAC prompt itself when the exe requires elevation.
+const LAUNCH_SCRIPT: &str = "$ErrorActionPreference = 'Stop'; \
+$a = @($env:HANGAR_ARGS | ConvertFrom-Json | ForEach-Object { '\"' + ($_ -replace '\"','\\\"') + '\"' }); \
+if ($a.Count) { Start-Process -FilePath $env:HANGAR_EXE -WorkingDirectory $env:HANGAR_DIR -ArgumentList $a } \
+else { Start-Process -FilePath $env:HANGAR_EXE -WorkingDirectory $env:HANGAR_DIR }";
+
+fn launch_env(path: &std::path::Path, args: &[String]) -> Vec<(&'static str, String)> {
+    let dir = path.parent().map(|d| d.to_path_buf()).unwrap_or_default();
+    vec![
+        ("HANGAR_EXE", path.to_string_lossy().into_owned()),
+        ("HANGAR_DIR", dir.to_string_lossy().into_owned()),
+        ("HANGAR_ARGS", serde_json::to_string(args).unwrap_or_else(|_| "[]".into())),
+    ]
+}
+
+/// Starts the exe through a short-lived PowerShell so the game is not a child of
+/// Hangar (killing Hangar's process tree must not kill the game).
+fn launch_exe(path: &std::path::Path, args: &[String]) -> Result<(), String> {
+    if !path.exists() {
+        return Err("Oyun dosyası bulunamadı".into());
+    }
+    let root = std::env::var("SystemRoot").unwrap_or_else(|_| "C:\\Windows".into());
+    let ps = std::path::Path::new(&root).join("System32\\WindowsPowerShell\\v1.0\\powershell.exe");
+    let mut cmd = std::process::Command::new(ps);
+    cmd.args(["-NoProfile", "-NonInteractive", "-Command", LAUNCH_SCRIPT]);
+    for (k, v) in launch_env(path, args) {
+        cmd.env(k, v);
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    }
+    let status = cmd.status().map_err(|e| format!("Açılamadı: {e}"))?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err("Açılamadı: oyun başlatılamadı".into())
+    }
+}
+
+// Async + spawn_blocking: a UAC prompt keeps powershell alive until answered,
+// which must not freeze the UI thread (sync commands run on it).
 #[tauri::command]
-pub fn launch(app: AppHandle, db: Dbs, game_id: i64, platform: Option<Platform>) -> Result<String, String> {
-    let g = lock(&db)?;
-    let games = g.games().map_err(dberr)?;
-    let game = games.iter().find(|x| x.id == game_id).ok_or("Oyun bulunamadı")?;
-    let (entry, uri) = resolve(game, platform).ok_or("Başlatılacak platform yok")?;
-    app.opener()
-        .open_url(&uri, None::<&str>)
-        .map_err(|e| format!("Açılamadı: {e}"))?;
-    if entry.installed {
+pub async fn launch(app: AppHandle, db: Dbs<'_>, game_id: i64, platform: Option<Platform>) -> Result<String, String> {
+    let (installed, uri, target) = {
+        let g = lock(&db)?;
+        let games = g.games().map_err(dberr)?;
+        let game = games.iter().find(|x| x.id == game_id).ok_or("Oyun bulunamadı")?;
+        let (entry, uri) = resolve(game, platform).ok_or("Başlatılacak platform yok")?;
+        (entry.installed, uri.clone(), launch_target(entry, &uri))
+    };
+    match target {
+        LaunchTarget::Uri(u) => app
+            .opener()
+            .open_url(&u, None::<&str>)
+            .map_err(|e| format!("Açılamadı: {e}"))?,
+        LaunchTarget::Exe { path, args } => {
+            tauri::async_runtime::spawn_blocking(move || launch_exe(&path, &args))
+                .await
+                .map_err(|e| e.to_string())??
+        }
+    }
+    if installed {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_secs() as i64)
             .unwrap_or(0);
+        let g = lock(&db)?;
         g.record_launch(game_id, now).map_err(dberr)?;
         let fresh = g.games().map_err(dberr)?;
         let _ = app.emit("library-updated", &fresh);
@@ -169,9 +237,49 @@ pub fn launch(app: AppHandle, db: Dbs, game_id: i64, platform: Option<Platform>)
     Ok(uri)
 }
 
+#[cfg(test)]
+mod launch_tests {
+    use super::*;
+
+    #[test]
+    fn script_is_constant_and_values_stay_out_of_it() {
+        assert!(!LAUNCH_SCRIPT.contains("RunAs"));
+        let env = launch_env(std::path::Path::new("C:\\Oyunlar\\Şeker \"Oyun\"\\g.exe"), &["-a b".into()]);
+        for (_, v) in &env {
+            assert!(!LAUNCH_SCRIPT.contains(v.as_str()));
+        }
+    }
+
+    #[test]
+    fn env_holds_exact_values() {
+        let args = vec!["--ad=Çılgın Oyun".to_string(), "say \"hi\"".to_string()];
+        let env = launch_env(std::path::Path::new("C:\\Oyunlar\\Şeker Oyun\\g.exe"), &args);
+        let get = |k: &str| env.iter().find(|(n, _)| *n == k).unwrap().1.clone();
+        assert_eq!(get("HANGAR_EXE"), "C:\\Oyunlar\\Şeker Oyun\\g.exe");
+        assert_eq!(get("HANGAR_DIR"), "C:\\Oyunlar\\Şeker Oyun");
+        let back: Vec<String> = serde_json::from_str(&get("HANGAR_ARGS")).unwrap();
+        assert_eq!(back, args);
+    }
+}
+
 #[tauri::command]
 pub fn set_preferred(db: Dbs, game_id: i64, platform: Platform) -> Result<(), String> {
     lock(&db)?.set_preferred(game_id, platform).map_err(dberr)
+}
+
+#[tauri::command]
+pub async fn set_cover(app: AppHandle, game_id: i64, path: String) -> Result<String, String> {
+    // Own connection: the shared Mutex<Db> is not held during file I/O.
+    let dir = app.state::<CoversDir>().0.clone();
+    let db_path = app.state::<DbPath>().0.clone();
+    let out = tauri::async_runtime::spawn_blocking(move || {
+        let db = Db::open(&db_path).map_err(dberr)?;
+        hangar_core::artwork::set_custom_cover(&db, &dir, game_id, std::path::Path::new(&path))
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+    let _ = app.emit("cover-ready", serde_json::json!({ "id": game_id, "path": out }));
+    Ok(out)
 }
 
 #[tauri::command]
@@ -220,4 +328,82 @@ pub async fn split_game(app: AppHandle, a: (Platform, String), b: (Platform, Str
 #[tauri::command]
 pub async fn merge_games(app: AppHandle, a: (Platform, String), b: (Platform, String)) -> Result<ScanReport, String> {
     override_and_rescan(app, a, b, true).await
+}
+
+fn clean_local(title: &str, exe_path: &str) -> Result<(String, String), String> {
+    let (title, exe) = (title.trim(), exe_path.trim());
+    if title.is_empty() || exe.is_empty() {
+        return Err("Ad ve exe yolu gerekli".into());
+    }
+    Ok((title.to_string(), exe.to_string()))
+}
+
+#[tauri::command]
+pub async fn add_local_game(app: AppHandle, title: String, exe_path: String) -> Result<ScanReport, String> {
+    let (title, exe) = clean_local(&title, &exe_path)?;
+    lock(&app.state::<Mutex<Db>>())?.add_local_game(&title, &exe, "manual").map_err(dberr)?;
+    rescan_inner(app).await
+}
+
+#[tauri::command]
+pub async fn update_local_game(app: AppHandle, id: i64, title: String, exe_path: String) -> Result<ScanReport, String> {
+    let (title, exe) = clean_local(&title, &exe_path)?;
+    lock(&app.state::<Mutex<Db>>())?.update_local_game(id, &title, &exe).map_err(dberr)?;
+    rescan_inner(app).await
+}
+
+#[tauri::command]
+pub async fn remove_local_game(app: AppHandle, id: i64) -> Result<ScanReport, String> {
+    lock(&app.state::<Mutex<Db>>())?.remove_local_game(id).map_err(dberr)?;
+    rescan_inner(app).await
+}
+
+fn scan_folders_of(db: &Db) -> Vec<String> {
+    setting(db, "scan_folders")
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default()
+}
+
+#[tauri::command]
+pub fn get_scan_folders(db: Dbs) -> Result<Vec<String>, String> {
+    Ok(scan_folders_of(&*lock(&db)?))
+}
+
+#[tauri::command]
+pub fn set_scan_folders(db: Dbs, folders: Vec<String>) -> Result<(), String> {
+    let json = serde_json::to_string(&folders).map_err(|e| e.to_string())?;
+    lock(&db)?.set_setting("scan_folders", &json).map_err(dberr)
+}
+
+#[tauri::command]
+pub async fn scan_candidates(app: AppHandle) -> Result<Vec<Candidate>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let (folders, known) = {
+            let state = app.state::<Mutex<Db>>();
+            let g = lock(&state)?;
+            let mut known: Vec<PathBuf> = g
+                .games()
+                .map_err(dberr)?
+                .iter()
+                .flat_map(|game| game.entries.iter().filter(|e| e.platform != Platform::Local).filter_map(|e| e.install_path.clone()))
+                .map(PathBuf::from)
+                .collect();
+            known.extend(g.local_games().map_err(dberr)?.into_iter().map(|l| PathBuf::from(l.exe_path)));
+            let folders: Vec<PathBuf> = scan_folders_of(&g).into_iter().map(PathBuf::from).collect();
+            (folders, known)
+        };
+        Ok(local_candidates(&folders, &known))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn add_local_games(app: AppHandle, items: Vec<Candidate>) -> Result<ScanReport, String> {
+    let cleaned = items
+        .iter()
+        .map(|c| clean_local(&c.title, &c.exe_path))
+        .collect::<Result<Vec<_>, _>>()?;
+    lock(&app.state::<Mutex<Db>>())?.add_local_games(&cleaned, "scan").map_err(dberr)?;
+    rescan_inner(app).await
 }

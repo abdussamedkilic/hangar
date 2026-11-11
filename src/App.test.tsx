@@ -4,7 +4,7 @@ import App from "./App";
 
 const rescan = vi.hoisted(() => vi.fn());
 
-vi.mock("./lib/api", () => ({ api: { getSettings: vi.fn().mockResolvedValue({ steam_api_key: "k", steam_id: null }), rescan: vi.fn().mockResolvedValue({ games: 0, warnings: [] }) } }));
+vi.mock("./lib/api", () => ({ api: { getSettings: vi.fn().mockResolvedValue({ steam_api_key: "k", steam_id: null }), getScanFolders: vi.fn().mockResolvedValue([]), rescan: vi.fn().mockResolvedValue({ games: 0, warnings: [] }) } }));
 
 vi.mock("./state/useLibrary", () => ({
   useLibrary: () => ({

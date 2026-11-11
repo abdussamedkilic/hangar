@@ -2,7 +2,7 @@ import type { Game, Platform } from "../lib/api";
 import { isInstalled } from "../lib/library";
 import Cover from "./Cover";
 
-const ABBR: Record<Platform, string> = { steam: "STE", epic: "EPI", ubisoft: "UBI" };
+const ABBR: Record<Platform, string> = { steam: "STE", epic: "EPI", ubisoft: "UBI", gog: "GOG", riot: "RIO", local: "LOC" };
 
 interface Props {
   game: Game;
