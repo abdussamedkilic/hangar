@@ -50,6 +50,15 @@ pub struct PlatformEntry {
     /// Extra arguments when `launch_uri` is an exe path.
     #[serde(default)]
     pub launch_args: Vec<String>,
+    /// Public cover image URL (Epic/GOG); old stored JSON lacks it.
+    #[serde(default)]
+    pub cover_url: Option<String>,
+    /// Edition label ("Remastered"...), `None` for Original. Computed by `Db::games()`.
+    #[serde(default)]
+    pub edition: Option<String>,
+    /// Copy marker ("Prime"). Computed by `Db::games()`.
+    #[serde(default)]
+    pub copy: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -58,7 +67,11 @@ pub struct Game {
     pub title: String,
     pub norm_title: String,
     pub cover_path: Option<String>,
-    pub preferred: Option<Platform>,
+    /// Preferred entry as (platform, platform_id).
+    pub preferred: Option<(Platform, String)>,
+    /// The entry Play uses: preferred, else latest-played installed, else menu order.
+    #[serde(default)]
+    pub default_entry: Option<(Platform, String)>,
     pub last_launched: Option<i64>,
     pub entries: Vec<PlatformEntry>,
 }
@@ -78,5 +91,12 @@ mod tests {
         let j = r#"{"platform":"steam","platform_id":"1","title":"Hades","installed":true,"install_path":null,"size_bytes":null,"last_played":null,"playtime_min":null,"launch_uri":"steam://rungameid/1","install_uri":null}"#;
         let e: PlatformEntry = serde_json::from_str(j).unwrap();
         assert!(e.launch_args.is_empty());
+    }
+
+    #[test]
+    fn old_json_without_cover_url_still_loads() {
+        let j = r#"{"platform":"gog","platform_id":"1","title":"Prey","installed":false,"install_path":null,"size_bytes":null,"last_played":null,"playtime_min":null,"launch_uri":"x","install_uri":null,"launch_args":[]}"#;
+        let e: PlatformEntry = serde_json::from_str(j).unwrap();
+        assert!(e.cover_url.is_none());
     }
 }

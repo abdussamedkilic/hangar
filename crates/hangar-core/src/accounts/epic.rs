@@ -243,6 +243,8 @@ pub struct LibItem {
 pub struct CatalogInfo {
     pub title: String,
     pub is_game: bool,
+    /// Tall box art (https only) from catalog `keyImages`.
+    pub cover_url: Option<String>,
 }
 
 pub fn parse_library_page(json: &str) -> Result<(Vec<LibItem>, Option<String>), AuthError> {
@@ -268,6 +270,17 @@ pub fn parse_library_page(json: &str) -> Result<(Vec<LibItem>, Option<String>), 
     Ok((items, cursor))
 }
 
+/// Prefers DieselGameBoxTall, then OfferImageTall, then DieselGameBox; https only.
+fn pick_cover(item: &serde_json::Value) -> Option<String> {
+    let imgs = item.get("keyImages")?.as_array()?;
+    ["DieselGameBoxTall", "OfferImageTall", "DieselGameBox"].iter().find_map(|ty| {
+        imgs.iter().find_map(|i| {
+            let url = i.get("url")?.as_str()?;
+            (i.get("type")?.as_str()? == *ty && url.starts_with("https://")).then(|| url.to_string())
+        })
+    })
+}
+
 pub fn parse_catalog(json: &str) -> Result<HashMap<String, CatalogInfo>, AuthError> {
     let bad = || AuthError::Parse("catalog".into());
     let v: serde_json::Value = serde_json::from_str(json).map_err(|_| bad())?;
@@ -287,7 +300,7 @@ pub fn parse_catalog(json: &str) -> Result<HashMap<String, CatalogInfo>, AuthErr
             && !has("addons")
             && !has("digitalextras")
             && (!has("applications") || has("games"));
-        out.insert(id.clone(), CatalogInfo { title, is_game });
+        out.insert(id.clone(), CatalogInfo { title, is_game, cover_url: pick_cover(item) });
     }
     Ok(out)
 }
@@ -310,6 +323,9 @@ pub fn owned_entries(items: &[LibItem], catalog: &HashMap<String, CatalogInfo>) 
                 launch_uri: format!("{base}?action=launch&silent=true"),
                 install_uri: Some(format!("{base}?action=install")),
                 launch_args: vec![],
+                cover_url: info.cover_url.clone(),
+                edition: None,
+                copy: None,
             })
         })
         .collect()
@@ -327,6 +343,19 @@ mod tests {
         assert_eq!(c2, None);
         assert_eq!(b.len(), 2);
         assert!(parse_library_page("nope").is_err());
+    }
+    #[test] fn catalog_cover_preference() {
+        let c = parse_catalog(r#"{
+          "a":{"title":"A","keyImages":[{"type":"DieselGameBox","url":"https://i/box.jpg"},{"type":"OfferImageTall","url":"https://i/offer.jpg"},{"type":"DieselGameBoxTall","url":"https://i/tall.jpg"}]},
+          "b":{"title":"B","keyImages":[{"type":"DieselGameBox","url":"https://i/box.jpg"},{"type":"OfferImageTall","url":"https://i/offer.jpg"}]},
+          "c":{"title":"C","keyImages":[{"type":"DieselGameBoxTall","url":"http://i/tall.jpg"},{"type":"DieselGameBox","url":"https://i/box.jpg"}]},
+          "d":{"title":"D","keyImages":[{"type":"Thumbnail","url":"https://i/t.jpg"}]},
+          "e":{"title":"E"}}"#).unwrap();
+        assert_eq!(c["a"].cover_url.as_deref(), Some("https://i/tall.jpg"));
+        assert_eq!(c["b"].cover_url.as_deref(), Some("https://i/offer.jpg"));
+        assert_eq!(c["c"].cover_url.as_deref(), Some("https://i/box.jpg"));
+        assert_eq!(c["d"].cover_url, None);
+        assert_eq!(c["e"].cover_url, None);
     }
     #[test] fn catalog_filters() {
         let c = parse_catalog(&fx("synthetic-catalog.json")).unwrap();
@@ -380,7 +409,7 @@ mod tests {
     }
     #[test] fn entry_uris() {
         let items = vec![LibItem { namespace: "ns".into(), catalog_item_id: "cid".into(), app_name: "Fig".into() }];
-        let cat = HashMap::from([("cid".to_string(), CatalogInfo { title: "Death's Door".into(), is_game: true })]);
+        let cat = HashMap::from([("cid".to_string(), CatalogInfo { title: "Death's Door".into(), is_game: true, cover_url: None })]);
         let e = &owned_entries(&items, &cat)[0];
         assert_eq!((e.platform, e.platform_id.as_str(), e.installed), (Platform::Epic, "Fig", false));
         assert_eq!(e.launch_uri, "com.epicgames.launcher://apps/ns%3Acid%3AFig?action=launch&silent=true");
@@ -662,7 +691,7 @@ mod tests {
         let c = client(api, &store);
         db.owned_cache_put(Platform::Epic, &[], 1).unwrap();
         db.set_account_expired(Platform::Epic, true).unwrap();
-        let cached = HashMap::from([("game1".to_string(), CatalogInfo { title: "Oyun".into(), is_game: true })]);
+        let cached = HashMap::from([("game1".to_string(), CatalogInfo { title: "Oyun".into(), is_game: true, cover_url: None })]);
         db.catalog_put(&cached).unwrap();
         assert!(!c.disconnect(&db));
         assert_eq!(store.raw(Platform::Epic), None);

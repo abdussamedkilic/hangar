@@ -27,6 +27,8 @@ pub struct DbPath(pub PathBuf);
 pub struct CoverJob {
     running: AtomicBool,
     rerun: AtomicBool,
+    /// Game ids already tried without success this session (no repeated network attempts).
+    failed: Mutex<std::collections::HashSet<i64>>,
 }
 
 type Dbs<'a> = State<'a, Mutex<Db>>;
@@ -126,6 +128,10 @@ fn scan(app: &AppHandle) -> Result<ScanReport, String> {
 
 fn fetch_covers(app: AppHandle) {
     let job = app.state::<CoverJob>();
+    // A new rescan-triggered pass retries earlier failures (e.g. tried while offline).
+    if let Ok(mut f) = job.failed.lock() {
+        f.clear();
+    }
     if job.running.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).is_err() {
         job.rerun.store(true, Ordering::SeqCst);
         return;
@@ -141,8 +147,19 @@ fn fetch_covers(app: AppHandle) {
             if let Ok(db) = Db::open(&db_path) {
                 if let Ok(games) = db.games() {
                     for game in games.iter().filter(|g| g.cover_path.is_none()) {
-                        if let Some(path) = ensure_cover(&db, &dir, game, steam_root.as_deref(), Some(std::path::Path::new(hangar_core::providers::riot::DEFAULT_ROOT))) {
-                            let _ = app.emit("cover-ready", serde_json::json!({ "id": game.id, "path": path }));
+                        if job.failed.lock().map_or(false, |f| f.contains(&game.id)) {
+                            continue;
+                        }
+                        let found = ensure_cover(&db, &dir, game, steam_root.as_deref(), Some(std::path::Path::new(hangar_core::providers::riot::DEFAULT_ROOT)));
+                        match found {
+                            Some(path) => {
+                                let _ = app.emit("cover-ready", serde_json::json!({ "id": game.id, "path": path }));
+                            }
+                            None => {
+                                if let Ok(mut f) = job.failed.lock() {
+                                    f.insert(game.id);
+                                }
+                            }
                         }
                     }
                 }
@@ -226,12 +243,12 @@ fn launch_exe(path: &std::path::Path, args: &[String]) -> Result<(), String> {
 // Async + spawn_blocking: a UAC prompt keeps powershell alive until answered,
 // which must not freeze the UI thread (sync commands run on it).
 #[tauri::command]
-pub async fn launch(app: AppHandle, db: Dbs<'_>, game_id: i64, platform: Option<Platform>) -> Result<String, String> {
+pub async fn launch(app: AppHandle, db: Dbs<'_>, game_id: i64, platform: Option<Platform>, platform_id: Option<String>) -> Result<String, String> {
     let (installed, uri, target) = {
         let g = lock(&db)?;
         let games = g.games().map_err(dberr)?;
         let game = games.iter().find(|x| x.id == game_id).ok_or("Oyun bulunamadı")?;
-        let (entry, uri) = resolve(game, platform).ok_or("Başlatılacak platform yok")?;
+        let (entry, uri) = resolve(game, platform, platform_id.as_deref()).ok_or("Başlatılacak platform yok")?;
         (entry.installed, uri.clone(), launch_target(entry, &uri))
     };
     match target {
@@ -284,8 +301,8 @@ mod launch_tests {
 }
 
 #[tauri::command]
-pub fn set_preferred(db: Dbs, game_id: i64, platform: Platform) -> Result<(), String> {
-    lock(&db)?.set_preferred(game_id, platform).map_err(dberr)
+pub fn set_preferred(db: Dbs, game_id: i64, platform: Platform, platform_id: Option<String>) -> Result<(), String> {
+    lock(&db)?.set_preferred(game_id, platform, platform_id.as_deref()).map_err(dberr)
 }
 
 #[tauri::command]

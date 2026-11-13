@@ -32,5 +32,5 @@ test("Kapak seç… picks an image and calls api.setCover", async () => {
   fireEvent.contextMenu(screen.getByRole("button", { name: "Hades" }));
   fireEvent.click(screen.getByRole("menuitem", { name: "Kapak seç…" }));
   await waitFor(() => expect(api.setCover).toHaveBeenCalledWith(7, "C:\\x\\a.png"));
-  expect(open).toHaveBeenCalledWith({ filters: [{ name: "Görsel", extensions: ["png", "jpg", "jpeg"] }] });
+  expect(open).toHaveBeenCalledWith({ filters: [{ name: "Görsel", extensions: ["png", "jpg", "jpeg", "webp"] }] });
 });

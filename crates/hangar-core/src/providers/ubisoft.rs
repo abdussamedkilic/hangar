@@ -89,6 +89,9 @@ impl LibraryProvider for UbisoftProvider {
                     playtime_min: None,
                     install_uri: Some("uplay://".to_string()),
                     launch_args: vec![],
+                    cover_url: None,
+                    edition: None,
+                    copy: None,
                 })
             })
             .collect())

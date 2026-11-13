@@ -1,4 +1,4 @@
-import type { Game, Platform } from "./api";
+import type { Game, Platform, PlatformEntry } from "./api";
 export type { Game, Platform, PlatformEntry } from "./api";
 
 export type Filter = "all" | "installed" | Platform;
@@ -8,6 +8,7 @@ const PLATFORMS: Platform[] = ["steam", "epic", "ubisoft", "gog", "riot", "local
 const SUFFIXES = [
   "ultimate edition", "definitive edition", "game of the year edition", "goty",
   "deluxe edition", "complete edition", "remastered", "director's cut",
+  "enhanced edition", "special edition", "gold edition", "anniversary edition", "amazon prime",
 ];
 const TR: Record<string, string> = { "ı": "i", "ş": "s", "ğ": "g", "ü": "u", "ö": "o", "ç": "c" };
 
@@ -37,9 +38,9 @@ export function normalize(title: string): string {
 
 export const isInstalled = (g: Game): boolean => g.entries.some((e) => e.installed);
 
-export function defaultPlatform(g: Game): Platform {
-  if (g.preferred && g.entries.some((e) => e.platform === g.preferred)) return g.preferred;
-  return PLATFORMS.find((p) => g.entries.some((e) => e.platform === p)) ?? g.entries[0].platform;
+export function currentEntry(g: Game): PlatformEntry {
+  const d = g.default_entry;
+  return (d && g.entries.find((e) => e.platform === d[0] && e.platform_id === d[1])) || g.entries[0];
 }
 
 function lastActive(g: Game): number | null {

@@ -109,6 +109,9 @@ pub fn parse_manifest(src: &str) -> Option<PlatformEntry> {
         launch_uri: format!("steam://rungameid/{appid}"),
         install_uri: Some(format!("steam://install/{appid}")),
         launch_args: vec![],
+        cover_url: None,
+        edition: None,
+        copy: None,
     })
 }
 
@@ -152,6 +155,9 @@ pub fn parse_owned_games(json: &str) -> Result<Vec<PlatformEntry>, ProviderError
                 launch_uri: format!("steam://rungameid/{appid}"),
                 install_uri: Some(format!("steam://install/{appid}")),
                 launch_args: vec![],
+                cover_url: None,
+                edition: None,
+                copy: None,
             })
         })
         .collect())

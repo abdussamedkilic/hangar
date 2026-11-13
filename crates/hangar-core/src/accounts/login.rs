@@ -7,8 +7,63 @@ pub enum NavDecision {
     Block,
 }
 
-/// Üçüncü taraf girişi (Google/Apple/…) desteklenmez; Epic e-postasıyla giriş yapılır.
-pub const ALLOWED_HOSTS: &[&str] = &["epicgames.com", "hcaptcha.com", "arkoselabs.com", "funcaptcha.com"];
+/// Gezinme kuralları: `(host, tam_host, yol_önekleri)`. `tam_host` true ise yalnızca o host,
+/// false ise host ve alt alan adları; önek listesi boşsa her yol, doluysa yol bu öneklerden biriyle
+/// başlamalı. Epic + captcha (alt alanlarıyla, her yol); Google/Apple/Microsoft giriş hostları
+/// (tam host, her yol); Sony hesabı (alt alanlarıyla, her yol); Nintendo (tam host, her yol);
+/// Steam yalnızca `/openid/` ve `/login/`; Facebook (www/m/web) yalnızca giriş/yetki/doğrulama yolları ve `/v<sürüm>/dialog/oauth`.
+/// Yol önekleri bölüm sınırında eşleşir (`/login` = `/login` veya `/login/...`); açık port her zaman engellenir.
+/// Sitenin geri kalanı engellenir. Geri dönüş nonce'la bağlı olduğundan izinli sayfalar kod enjekte edemez.
+pub const NAV_RULES: &[(&str, bool, &[&str])] = &[
+    ("epicgames.com", false, &[]),
+    ("hcaptcha.com", false, &[]),
+    ("arkoselabs.com", false, &[]),
+    ("funcaptcha.com", false, &[]),
+    ("accounts.google.com", true, &[]),
+    ("appleid.apple.com", true, &[]),
+    ("idmsa.apple.com", true, &[]),
+    ("login.live.com", true, &[]),
+    ("account.live.com", true, &[]),
+    ("login.microsoftonline.com", true, &[]),
+    ("account.sony.com", false, &[]),
+    ("accounts.nintendo.com", true, &[]),
+    ("steamcommunity.com", true, &["/openid/", "/login/"]),
+    ("www.facebook.com", true, FB_PATHS),
+    ("m.facebook.com", true, FB_PATHS),
+    ("web.facebook.com", true, FB_PATHS),
+];
+
+const FB_PATHS: &[&str] = &["/login", "/login.php", "/dialog/oauth", "/checkpoint", "/two_step_verification", "/privacy/consent"];
+
+/// `/v<digits>.<digits>/dialog/oauth...` (Facebook's versioned OAuth dialog).
+fn fb_versioned_oauth(path: &str) -> bool {
+    let Some(rest) = path.strip_prefix("/v") else { return false };
+    let Some((ver, tail)) = rest.split_once('/') else { return false };
+    let Some((maj, min)) = ver.split_once('.') else { return false };
+    let digits = |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit());
+    digits(maj) && digits(min) && (tail == "dialog/oauth" || tail.starts_with("dialog/oauth/"))
+}
+
+fn is_facebook(host: &str) -> bool {
+    matches!(host, "www.facebook.com" | "m.facebook.com" | "web.facebook.com")
+}
+
+fn nav_allowed(url: &url::Url) -> bool {
+    let host = url.host_str().unwrap_or("");
+    let path = url.path();
+    url.scheme() == "https"
+        && url.port().is_none()
+        && NAV_RULES.iter().any(|(h, exact, prefixes)| {
+            let host_ok = host == *h || (!*exact && host.ends_with(&format!(".{h}")));
+            host_ok
+                && (prefixes.is_empty()
+                    || prefixes.iter().any(|p| {
+                        let p = p.trim_end_matches('/');
+                        path == p || path.starts_with(&format!("{p}/"))
+                    })
+                    || (is_facebook(host) && fb_versioned_oauth(path)))
+        })
+}
 
 /// Her giriş denemesi için bir kez üretilen anti-CSRF etiketi (gizli anahtar değil).
 /// Yakalama adresi bu etiketi taşımıyorsa kabul edilmez; böylece izinli bir sayfa
@@ -63,7 +118,7 @@ pub fn decide(url: &url::Url, nonce: &str) -> NavDecision {
         }
         return NavDecision::Block;
     }
-    if url.scheme() == "https" && ALLOWED_HOSTS.iter().any(|h| host == *h || host.ends_with(&format!(".{h}"))) {
+    if nav_allowed(url) {
         return NavDecision::Allow;
     }
     NavDecision::Block
@@ -101,7 +156,10 @@ mod tests {
         for ok in ["https://www.epicgames.com/id/login", "https://newassets.hcaptcha.com/x", "https://epicgames.com/", "https://WWW.EPICGAMES.COM/"] {
             assert!(matches!(decide(&u(ok), N), NavDecision::Allow), "{ok}");
         }
-        for bad in ["https://accounts.google.com/o", "http://www.epicgames.com/","https://evil-epicgames.com/", "https://example.com/", "https://epicgames.com.evil.io/", "https://epicgames.com./", "https://epicgames.com@evil.io/"] {
+        for ok in ["https://accounts.google.com/o/oauth2", "https://appleid.apple.com/auth", "https://login.live.com/oauth20", "https://my.account.sony.com/x", "https://steamcommunity.com/openid/login", "https://accounts.nintendo.com/x", "https://www.facebook.com/dialog/oauth", "https://www.facebook.com/login/?x=1", "https://www.facebook.com/login.php", "https://www.facebook.com/v19.0/dialog/oauth", "https://web.facebook.com/login", "https://steamcommunity.com/login/home", "https://login.microsoftonline.com/common"] {
+            assert!(matches!(decide(&u(ok), N), NavDecision::Allow), "{ok}");
+        }
+        for bad in ["https://sites.google.com/x", "https://www.google.com/", "https://apple.com/", "https://evil.facebook.com/", "http://www.epicgames.com/","https://evil-epicgames.com/", "https://example.com/", "https://epicgames.com.evil.io/", "https://epicgames.com./", "https://epicgames.com@evil.io/", "https://steamcommunity.com/id/someone", "https://www.facebook.com/somepage", "https://evil.steamcommunity.com/openid/login", "https://evil.accounts.google.com/", "https://www.facebook.com/loginx", "https://www.facebook.com/video", "https://www.facebook.com:8443/login", "https://www.facebook.com/v19/dialog/oauth", "https://www.facebook.com/v19.0/dialog/oauthx", "https://steamcommunity.com/openidx", "https://www.epicgames.com:8443/id/login", "https://sub.accounts.nintendo.com/x"] {
             assert!(matches!(decide(&u(bad), N), NavDecision::Block), "{bad}");
         }
     }

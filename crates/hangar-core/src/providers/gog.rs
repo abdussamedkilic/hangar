@@ -49,6 +49,9 @@ pub fn entries_from(records: Vec<GogRecord>, galaxy: Option<&Path>) -> Vec<Platf
                 playtime_min: None,
                 install_uri: None,
                 launch_args,
+                cover_url: None,
+                edition: None,
+                copy: None,
             }
         })
         .collect()
@@ -56,6 +59,29 @@ pub fn entries_from(records: Vec<GogRecord>, galaxy: Option<&Path>) -> Vec<Platf
 
 /// GOG Galaxy's local database (read-only; Galaxy may be running).
 pub const GALAXY_DB: &str = r"C:\ProgramData\GOG.com\Galaxy\storage\galaxy-2.0.db";
+
+/// releaseKey -> `verticalCover` https URL from the `originalImages` piece. Any failure yields an empty map.
+fn vertical_covers(conn: &rusqlite::Connection) -> std::collections::HashMap<String, String> {
+    let mut map = std::collections::HashMap::new();
+    let Ok(mut stmt) = conn.prepare(
+        "SELECT p.releaseKey, p.value FROM GamePieces p JOIN GamePieceTypes t ON t.id = p.gamePieceTypeId WHERE t.type = 'originalImages'",
+    ) else {
+        return map;
+    };
+    let Ok(rows) = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))) else {
+        return map;
+    };
+    for (key, value) in rows.flatten() {
+        let url = serde_json::from_str::<serde_json::Value>(&value)
+            .ok()
+            .and_then(|v| v.get("verticalCover").and_then(|u| u.as_str()).map(str::to_string))
+            .filter(|u| u.starts_with("https://"));
+        if let Some(u) = url {
+            map.insert(key, u);
+        }
+    }
+    map
+}
 
 /// Owned games (`gog_<id>` releases with a title) from an open Galaxy DB.
 pub fn owned_from_galaxy_db(conn: &rusqlite::Connection) -> rusqlite::Result<Vec<PlatformEntry>> {
@@ -66,6 +92,7 @@ pub fn owned_from_galaxy_db(conn: &rusqlite::Connection) -> rusqlite::Result<Vec
          WHERE t.type = 'title' AND r.releaseKey LIKE 'gog\\_%' ESCAPE '\\'",
     )?;
     let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
+    let covers = vertical_covers(conn);
     let mut out: Vec<PlatformEntry> = Vec::new();
     for row in rows {
         let (key, value) = row?;
@@ -82,6 +109,7 @@ pub fn owned_from_galaxy_db(conn: &rusqlite::Connection) -> rusqlite::Result<Vec
             continue;
         }
         let uri = format!("goggalaxy://openGameView/{id}");
+        let cover_url = covers.get(&key).cloned();
         out.push(PlatformEntry {
             platform: Platform::Gog,
             platform_id: id,
@@ -94,6 +122,9 @@ pub fn owned_from_galaxy_db(conn: &rusqlite::Connection) -> rusqlite::Result<Vec
             playtime_min: None,
             install_uri: Some(uri),
             launch_args: vec![],
+            cover_url,
+            edition: None,
+            copy: None,
         });
     }
     out.sort_by(|a, b| a.platform_id.cmp(&b.platform_id));
@@ -114,6 +145,11 @@ pub fn owned_from_path(path: &Path) -> Vec<PlatformEntry> {
 
 /// Installed entries win: an owned entry with an installed id is dropped.
 pub fn combine(mut installed: Vec<PlatformEntry>, owned: Vec<PlatformEntry>) -> Vec<PlatformEntry> {
+    let covers: std::collections::HashMap<String, String> =
+        owned.iter().filter_map(|e| Some((e.platform_id.clone(), e.cover_url.clone()?))).collect();
+    for e in installed.iter_mut().filter(|e| e.cover_url.is_none()) {
+        e.cover_url = covers.get(&e.platform_id).cloned();
+    }
     let ids: std::collections::HashSet<String> = installed.iter().map(|e| e.platform_id.clone()).collect();
     installed.extend(owned.into_iter().filter(|e| !ids.contains(&e.platform_id)));
     installed
@@ -193,13 +229,15 @@ mod tests {
             "CREATE TABLE LibraryReleases (releaseKey TEXT);
              CREATE TABLE GamePieceTypes (id INTEGER, type TEXT);
              CREATE TABLE GamePieces (releaseKey TEXT, gamePieceTypeId INTEGER, value TEXT);
-             INSERT INTO GamePieceTypes VALUES (1, 'title'), (2, 'originalTitle');
+             INSERT INTO GamePieceTypes VALUES (1, 'title'), (2, 'originalTitle'), (3, 'originalImages');
              INSERT INTO LibraryReleases VALUES ('gog_2'), ('gog_1'), ('steam_3'), ('gog_4');
              INSERT INTO GamePieces VALUES
                ('gog_1', 1, '{\"title\":\"Prey\"}'),
                ('gog_2', 1, '{\"title\":\"Hades - Amazon Prime\"}'),
                ('steam_3', 1, '{\"title\":\"Steam Game\"}'),
-               ('gog_4', 2, '{\"title\":\"Wrong Type\"}');",
+               ('gog_4', 2, '{\"title\":\"Wrong Type\"}'),
+               ('gog_1', 3, '{\"background\":\"https://images.gog.com/b.webp\",\"verticalCover\":\"https://images.gog.com/abc_glx_vertical_cover.webp?namespace=gamesdb\"}'),
+               ('gog_2', 3, '{\"verticalCover\":\"http://insecure/x.webp\"}');",
         )
         .unwrap();
         c
@@ -220,6 +258,11 @@ mod tests {
         assert!(e.launch_args.is_empty());
         assert!(e.install_path.is_none() && e.size_bytes.is_none() && e.last_played.is_none() && e.playtime_min.is_none());
         assert_eq!(got[1].title, "Hades - Amazon Prime");
+        assert_eq!(
+            got[0].cover_url.as_deref(),
+            Some("https://images.gog.com/abc_glx_vertical_cover.webp?namespace=gamesdb")
+        );
+        assert_eq!(got[1].cover_url, None); // non-https is rejected
     }
 
     #[test]
@@ -232,6 +275,18 @@ mod tests {
         assert_eq!(two.len(), 1);
         assert_eq!(two[0].title, "Hades");
         assert_eq!(all.iter().filter(|e| e.platform_id == "1").count(), 1);
+        assert!(all.iter().find(|e| e.platform_id == "1").unwrap().cover_url.is_some());
+    }
+
+    #[test]
+    fn installed_entry_gets_cover_from_owned() {
+        let mut o = owned_from_galaxy_db(&galaxy_db()).unwrap();
+        o.retain(|e| e.platform_id == "1");
+        let installed = entries_from(vec![rec("1", "Prey", r"D:\G\a.exe")], None);
+        let all = combine(installed, o);
+        assert_eq!(all.len(), 1);
+        assert!(!all[0].installed && all[0].launch_uri == r"D:\G\a.exe");
+        assert!(all[0].cover_url.as_deref().is_some_and(|u| u.contains("vertical_cover")));
     }
 
     #[test]

@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
-import type { Game, Platform } from "../lib/api";
+import type { EntryKey, Game } from "../lib/api";
 import { reducedMotion } from "../lib/motion";
 import Cover, { placeholderBg } from "./Cover";
 import PlayButton, { PLATFORM_NAME } from "./PlayButton";
@@ -39,8 +39,8 @@ const backdropStyle = (g: Game) =>
 
 interface Props {
   game: Game | null;
-  onLaunch: (p: Platform) => void;
-  onChoose: (p: Platform) => void;
+  onLaunch: (key: EntryKey) => void;
+  onChoose: (key: EntryKey) => void;
   onSplit?: (g: Game) => void;
   onEdit?: (g: Game) => void;
   onRemove?: (g: Game) => void;
@@ -87,8 +87,8 @@ export default function Stage({ game, onLaunch, onChoose, onSplit, onEdit, onRem
       <div className="st-l">
         <span className="eb">
           {isInstalled(game) ? "Hazır" : "Kurulu değil"} ·{" "}
-          {game.entries.map((e, i) => (
-            <span key={e.platform} lang="en">{i ? " + " : ""}{PLATFORM_NAME[e.platform]}</span>
+          {[...new Set(game.entries.map((e) => e.platform))].map((p, i) => (
+            <span key={p} lang="en">{i ? " + " : ""}{PLATFORM_NAME[p]}</span>
           ))}
         </span>
         <h1 lang="en">{game.title}</h1>

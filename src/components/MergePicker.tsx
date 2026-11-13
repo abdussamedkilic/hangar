@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import type { Game } from "../lib/api";
 import { view } from "../lib/library";
+import { ABBR, ORDER } from "./GameCard";
 import Modal from "./Modal";
 
 interface Props {
@@ -20,7 +21,10 @@ export default function MergePicker({ source, games, onPick, onClose }: Props) {
       <input className="pick-q" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Oyun ara" aria-label="Oyun ara" />
       <ul className="pick-list">
         {list.map((g) => (
-          <li key={g.id}><button onClick={() => onPick(g)} lang="en">{g.title}</button></li>
+          <li key={g.id}><button onClick={() => onPick(g)}>
+            <span lang="en">{g.title}</span>{" "}
+            <small className="pick-stores">{ORDER.filter((p) => g.entries.some((e) => e.platform === p)).map((p) => ABBR[p]).join(" ")}</small>
+          </button></li>
         ))}
         {list.length === 0 && <li className="none">Eşleşen oyun yok.</li>}
       </ul>

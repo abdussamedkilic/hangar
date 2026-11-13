@@ -108,6 +108,9 @@ impl RiotProvider {
                         format!("--launch-product={product}"),
                         format!("--launch-patchline={patchline}"),
                     ],
+                    cover_url: None,
+                    edition: None,
+                    copy: None,
                 })
             })
             .collect();

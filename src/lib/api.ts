@@ -14,6 +14,8 @@ export interface PlatformEntry {
   launch_uri: string;
   install_uri: string | null;
   launch_args?: string[];
+  edition?: string | null;
+  copy?: string | null;
 }
 
 export interface Game {
@@ -21,7 +23,8 @@ export interface Game {
   title: string;
   norm_title: string;
   cover_path: string | null;
-  preferred: Platform | null;
+  preferred: EntryKey | null;
+  default_entry?: EntryKey | null;
   last_launched: number | null;
   entries: PlatformEntry[];
 }
@@ -52,8 +55,8 @@ export interface AccountStatus {
 export const api = {
   getLibrary: () => invoke<Game[]>("get_library"),
   rescan: () => invoke<ScanReport>("rescan"),
-  launch: (gameId: number, platform?: Platform) => invoke<string>("launch", { gameId, platform }),
-  setPreferred: (gameId: number, platform: Platform) => invoke<void>("set_preferred", { gameId, platform }),
+  launch: (gameId: number, platform?: Platform, platformId?: string) => invoke<string>("launch", { gameId, platform, platformId }),
+  setPreferred: (gameId: number, platform: Platform, platformId?: string) => invoke<void>("set_preferred", { gameId, platform, platformId }),
   setCover: (gameId: number, path: string) => invoke<string>("set_cover", { gameId, path }),
   getSettings: () => invoke<Settings>("get_settings"),
   saveSettings: (s: Settings) => invoke<void>("save_settings", { steamApiKey: s.steam_api_key, steamId: s.steam_id }),

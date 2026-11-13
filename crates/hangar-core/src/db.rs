@@ -1,5 +1,5 @@
 use crate::accounts::epic::CatalogInfo;
-use crate::merge::Override;
+use crate::merge::{display_base, edition_of, normalize, Override};
 use crate::model::{Game, Platform, PlatformEntry};
 use rusqlite::{params, Connection, OptionalExtension, Result};
 use std::collections::HashMap;
@@ -27,6 +27,58 @@ fn rank(p: Platform) -> usize {
         .iter()
         .position(|x| *x == p)
         .unwrap_or(usize::MAX)
+}
+
+/// Menu order: installed first, then preferred, then entries without a copy marker, then platform
+/// priority, then platform_id.
+fn sort_menu(entries: &mut [PlatformEntry], preferred: Option<&(Platform, String)>) {
+    entries.sort_by_key(|e| {
+        (
+            !e.installed,
+            !preferred.is_some_and(|(p, id)| *p == e.platform && *id == e.platform_id),
+            e.copy.is_some(),
+            rank(e.platform),
+            e.platform_id.clone(),
+        )
+    });
+}
+
+/// "platform:id" (an id may itself contain ':'), or the legacy bare "platform" = first entry of it.
+fn resolve_preferred(entries: &[PlatformEntry], stored: &str) -> Option<(Platform, String)> {
+    if let Some((p, id)) = stored.split_once(':') {
+        let p = platform_from(p)?;
+        return entries
+            .iter()
+            .find(|e| e.platform == p && e.platform_id == id)
+            .map(|_| (p, id.to_string()));
+    }
+    let p = platform_from(stored)?;
+    entries
+        .iter()
+        .find(|e| e.platform == p)
+        .map(|e| (p, e.platform_id.clone()))
+}
+
+/// Preferred, else the installed entry with the latest last_played (ties: menu order), else (nothing
+/// installed) non-Original editions first, then menu order. `entries` must be in menu order.
+fn default_entry(
+    entries: &[PlatformEntry],
+    preferred: Option<&(Platform, String)>,
+) -> Option<(Platform, String)> {
+    if let Some(p) = preferred {
+        return Some(p.clone());
+    }
+    let key = |e: &PlatformEntry| (e.platform, e.platform_id.clone());
+    let mut best: Option<&PlatformEntry> = None;
+    for e in entries.iter().filter(|e| e.installed) {
+        if best.is_none_or(|b| e.last_played > b.last_played) {
+            best = Some(e);
+        }
+    }
+    if let Some(b) = best {
+        return Some(key(b));
+    }
+    entries.iter().min_by_key(|e| e.edition.is_none()).map(key)
 }
 
 impl Db {
@@ -68,12 +120,31 @@ impl Db {
              CREATE TABLE IF NOT EXISTS epic_catalog(
                 item_id TEXT PRIMARY KEY,
                 title TEXT NOT NULL,
-                is_game INTEGER NOT NULL);
+                is_game INTEGER NOT NULL,
+                cover_url TEXT);
              CREATE TABLE IF NOT EXISTS owned_cache(
                 platform TEXT PRIMARY KEY,
                 json TEXT NOT NULL,
                 fetched_at INTEGER NOT NULL);",
         )?;
+        // Older DBs lack the column.
+        let has_cover: bool = conn
+            .prepare("PRAGMA table_info(epic_catalog)")?
+            .query_map([], |r| r.get::<_, String>(1))?
+            .any(|n| n.is_ok_and(|n| n == "cover_url"));
+        if !has_cover {
+            conn.execute("ALTER TABLE epic_catalog ADD COLUMN cover_url TEXT", [])?;
+        }
+        // One-time (settings flag, also for DBs that already have the column): drop cached catalog
+        // rows so the next scan refetches them with cover urls.
+        let flag = "migr.epic_catalog_cover_v1";
+        let done: Option<String> = conn
+            .query_row("SELECT value FROM settings WHERE key = ?1", [flag], |r| r.get(0))
+            .optional()?;
+        if done.is_none() {
+            conn.execute("DELETE FROM epic_catalog", [])?;
+            conn.execute("INSERT OR REPLACE INTO settings(key, value) VALUES(?1, '1')", [flag])?;
+        }
         Ok(Db { conn })
     }
 
@@ -82,13 +153,35 @@ impl Db {
         tx.execute("DELETE FROM platform_entries", [])?;
         for (norm, entries) in &groups {
             // Display title: Steam entry if present, else first by Platform::ALL order.
-            let Some(display) = entries.iter().min_by_key(|e| rank(e.platform)) else {
+            // Title from an entry that belongs under this key (a hand-merged mixed-edition card is
+            // named after the entry whose own key it carries); else the best-ranked entry.
+            let own = |e: &&PlatformEntry| {
+                let ed = edition_of(&e.title);
+                let k = if ed.label == "Orijinal" {
+                    normalize(&e.title)
+                } else {
+                    format!("{}|{}", normalize(&e.title), ed.label)
+                };
+                k == *norm
+            };
+            let display = entries
+                .iter()
+                .filter(own)
+                .min_by_key(|e| rank(e.platform))
+                .or_else(|| entries.iter().min_by_key(|e| rank(e.platform)));
+            let Some(display) = display else {
                 continue;
+            };
+            let ed = edition_of(&display.title);
+            let title = if ed.label == "Orijinal" {
+                display_base(&display.title)
+            } else {
+                format!("{} {}", display_base(&display.title), ed.label)
             };
             tx.execute(
                 "INSERT INTO games(title, norm_title) VALUES(?1, ?2)
                  ON CONFLICT(norm_title) DO UPDATE SET title = excluded.title",
-                params![display.title, norm],
+                params![title, norm],
             )?;
             let id: i64 =
                 tx.query_row("SELECT id FROM games WHERE norm_title = ?1", [norm], |r| {
@@ -118,13 +211,16 @@ impl Db {
             .prepare("SELECT game_id, json FROM platform_entries")?;
         for row in st.query_map([], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?)))? {
             let (id, json) = row?;
-            let e: PlatformEntry = serde_json::from_str(&json).map_err(|err| {
+            let mut e: PlatformEntry = serde_json::from_str(&json).map_err(|err| {
                 rusqlite::Error::FromSqlConversionFailure(
                     1,
                     rusqlite::types::Type::Text,
                     Box::new(err),
                 )
             })?;
+            let ed = edition_of(&e.title);
+            e.edition = (ed.label != "Orijinal").then_some(ed.label);
+            e.copy = ed.copy;
             by_game.entry(id).or_default().push(e);
         }
         let mut st = self.conn.prepare(
@@ -132,32 +228,52 @@ impl Db {
              FROM games ORDER BY title COLLATE NOCASE, id",
         )?;
         let rows = st.query_map([], |r| {
-            let id: i64 = r.get(0)?;
-            let preferred: Option<String> = r.get(4)?;
-            Ok(Game {
-                id,
-                title: r.get(1)?,
-                norm_title: r.get(2)?,
-                cover_path: r.get(3)?,
-                preferred: preferred.as_deref().and_then(platform_from),
-                last_launched: r.get(5)?,
-                entries: Vec::new(),
-            })
+            Ok((
+                Game {
+                    id: r.get(0)?,
+                    title: r.get(1)?,
+                    norm_title: r.get(2)?,
+                    cover_path: r.get(3)?,
+                    preferred: None,
+                    default_entry: None,
+                    last_launched: r.get(5)?,
+                    entries: Vec::new(),
+                },
+                r.get::<_, Option<String>>(4)?,
+            ))
         })?;
         let mut games = Vec::new();
-        for g in rows {
-            let mut g = g?;
+        for row in rows {
+            let (mut g, pref) = row?;
             g.entries = by_game.remove(&g.id).unwrap_or_default();
-            g.entries.sort_by_key(|e| rank(e.platform));
+            sort_menu(&mut g.entries, None);
+            g.preferred = pref.as_deref().and_then(|p| resolve_preferred(&g.entries, p));
+            sort_menu(&mut g.entries, g.preferred.as_ref());
+            g.default_entry = default_entry(&g.entries, g.preferred.as_ref());
             games.push(g);
         }
         Ok(games)
     }
 
-    pub fn set_preferred(&self, game_id: i64, p: Platform) -> Result<()> {
+    /// Stores the preference per entry. `platform_id` omitted: first entry of that platform in menu order.
+    pub fn set_preferred(&self, game_id: i64, p: Platform, platform_id: Option<&str>) -> Result<()> {
+        let id = match platform_id {
+            Some(id) => id.to_string(),
+            None => {
+                let games = self.games()?;
+                let first = games
+                    .iter()
+                    .find(|g| g.id == game_id)
+                    .and_then(|g| g.entries.iter().find(|e| e.platform == p));
+                match first {
+                    Some(e) => e.platform_id.clone(),
+                    None => return Ok(()),
+                }
+            }
+        };
         self.conn.execute(
             "UPDATE games SET preferred = ?1 WHERE id = ?2",
-            params![p.as_str(), game_id],
+            params![format!("{}:{}", p.as_str(), id), game_id],
         )?;
         Ok(())
     }
@@ -197,7 +313,7 @@ impl Db {
     pub fn catalog_get(&self, ids: &[String]) -> Result<HashMap<String, CatalogInfo>> {
         let mut st = self
             .conn
-            .prepare("SELECT title, is_game FROM epic_catalog WHERE item_id = ?1")?;
+            .prepare("SELECT title, is_game, cover_url FROM epic_catalog WHERE item_id = ?1")?;
         let mut out = HashMap::new();
         for id in ids {
             let row = st
@@ -205,6 +321,7 @@ impl Db {
                     Ok(CatalogInfo {
                         title: r.get(0)?,
                         is_game: r.get(1)?,
+                        cover_url: r.get(2)?,
                     })
                 })
                 .optional()?;
@@ -219,8 +336,8 @@ impl Db {
         let tx = self.conn.unchecked_transaction()?;
         for (id, info) in items {
             tx.execute(
-                "INSERT OR REPLACE INTO epic_catalog(item_id, title, is_game) VALUES(?1, ?2, ?3)",
-                params![id, info.title, info.is_game],
+                "INSERT OR REPLACE INTO epic_catalog(item_id, title, is_game, cover_url) VALUES(?1, ?2, ?3, ?4)",
+                params![id, info.title, info.is_game, info.cover_url],
             )?;
         }
         tx.commit()
@@ -421,8 +538,8 @@ mod tests {
     fn catalog_roundtrip() {
         let db = Db::open_in_memory().unwrap();
         let mut m = HashMap::new();
-        m.insert("a".to_string(), CatalogInfo { title: "Alpha".into(), is_game: true });
-        m.insert("b".to_string(), CatalogInfo { title: "Beta DLC".into(), is_game: false });
+        m.insert("a".to_string(), CatalogInfo { title: "Alpha".into(), is_game: true, cover_url: Some("https://x/a.jpg".into()) });
+        m.insert("b".to_string(), CatalogInfo { title: "Beta DLC".into(), is_game: false, cover_url: None });
         db.catalog_put(&m).unwrap();
         let ids = vec!["a".to_string(), "b".to_string(), "c".to_string()];
         let got = db.catalog_get(&ids).unwrap();
@@ -432,6 +549,59 @@ mod tests {
         assert!(db.catalog_get(&[]).unwrap().is_empty());
         db.catalog_clear().unwrap();
         assert!(db.catalog_get(&ids).unwrap().is_empty());
+    }
+
+    #[test]
+    fn catalog_migrates_old_table() {
+        let p = std::env::temp_dir().join(format!("hangar-migr-{}.db", std::process::id()));
+        let _ = std::fs::remove_file(&p);
+        {
+            let c = Connection::open(&p).unwrap();
+            c.execute_batch(
+                "CREATE TABLE epic_catalog(item_id TEXT PRIMARY KEY, title TEXT NOT NULL, is_game INTEGER NOT NULL);
+                 INSERT INTO epic_catalog VALUES('a','Alpha',1);",
+            )
+            .unwrap();
+        }
+        let db = Db::open(&p).unwrap();
+        assert!(db.catalog_get(&["a".to_string()]).unwrap().is_empty()); // purged once
+        let mut m = HashMap::new();
+        m.insert("b".to_string(), CatalogInfo { title: "B".into(), is_game: true, cover_url: None });
+        db.catalog_put(&m).unwrap();
+        drop(db);
+        let db = Db::open(&p).unwrap(); // second open: column exists, rows kept
+        assert_eq!(db.catalog_get(&["b".to_string()]).unwrap().len(), 1);
+        drop(db);
+        let _ = std::fs::remove_file(&p);
+    }
+
+    #[test]
+    fn catalog_purge_runs_once_even_with_existing_column() {
+        let p = std::env::temp_dir().join(format!("hangar-migr2-{}.db", std::process::id()));
+        let _ = std::fs::remove_file(&p);
+        {
+            // Already has cover_url (from the first release) but no flag.
+            let c = Connection::open(&p).unwrap();
+            c.execute_batch(
+                "CREATE TABLE epic_catalog(item_id TEXT PRIMARY KEY, title TEXT NOT NULL, is_game INTEGER NOT NULL, cover_url TEXT);
+                 INSERT INTO epic_catalog VALUES('a','Alpha',1,NULL);",
+            )
+            .unwrap();
+        }
+        let db = Db::open(&p).unwrap();
+        assert!(db.catalog_get(&["a".to_string()]).unwrap().is_empty());
+        assert_eq!(db.get_setting("migr.epic_catalog_cover_v1").unwrap().as_deref(), Some("1"));
+        let mut m = HashMap::new();
+        m.insert("b".to_string(), CatalogInfo { title: "B".into(), is_game: true, cover_url: None });
+        db.catalog_put(&m).unwrap();
+        drop(db);
+        let db = Db::open(&p).unwrap();
+        assert_eq!(db.catalog_get(&["b".to_string()]).unwrap().len(), 1);
+        drop(db);
+        let _ = std::fs::remove_file(&p);
+        // Fresh DB: flag set, nothing to purge.
+        let db = Db::open_in_memory().unwrap();
+        assert_eq!(db.get_setting("migr.epic_catalog_cover_v1").unwrap().as_deref(), Some("1"));
     }
 
     #[test]
@@ -450,6 +620,9 @@ mod tests {
             launch_uri: "x".into(),
             install_uri: None,
             launch_args: vec![],
+            cover_url: None,
+            edition: None,
+            copy: None,
         }];
         db.owned_cache_put(Platform::Epic, &v, 100).unwrap();
         assert_eq!(db.owned_cache_get(Platform::Epic).unwrap(), Some(v));
@@ -490,5 +663,203 @@ mod tests {
         assert!(db.local_games().unwrap().is_empty());
         db.add_local_games(&bad[..1], "scan").unwrap();
         assert_eq!(db.local_games().unwrap().len(), 1);
+    }
+
+    fn pe(p: Platform, id: &str, title: &str, installed: bool, last: Option<i64>) -> PlatformEntry {
+        PlatformEntry {
+            platform: p,
+            platform_id: id.into(),
+            title: title.into(),
+            installed,
+            install_path: None,
+            size_bytes: None,
+            last_played: last,
+            playtime_min: None,
+            launch_uri: format!("l:{id}"),
+            install_uri: None,
+            launch_args: vec![],
+            cover_url: None,
+            edition: None,
+            copy: None,
+        }
+    }
+
+    fn one_card(db: &Db, entries: Vec<PlatformEntry>) -> i64 {
+        db.replace_entries(vec![("k".to_string(), entries)]).unwrap();
+        db.games().unwrap()[0].id
+    }
+
+    #[test]
+    fn mixed_edition_card_is_titled_from_key_entry() {
+        let db = Db::open_in_memory().unwrap();
+        db.replace_entries(vec![(
+            "bioshock".to_string(),
+            vec![
+                pe(Platform::Steam, "r", "BioShock Remastered", false, None),
+                pe(Platform::Gog, "o", "BioShock", false, None),
+            ],
+        )])
+        .unwrap();
+        assert_eq!(db.games().unwrap()[0].title, "BioShock");
+    }
+
+    #[test]
+    fn legacy_preferred_reads_as_first_entry_of_platform() {
+        let db = Db::open_in_memory().unwrap();
+        let id = one_card(
+            &db,
+            vec![pe(Platform::Gog, "b", "X", false, None), pe(Platform::Gog, "a", "X", false, None), pe(Platform::Steam, "s", "X", false, None)],
+        );
+        db.conn.execute("UPDATE games SET preferred = 'gog' WHERE id = ?1", [id]).unwrap();
+        assert_eq!(db.games().unwrap()[0].preferred, Some((Platform::Gog, "a".to_string())));
+        db.conn.execute("UPDATE games SET preferred = 'riot' WHERE id = ?1", [id]).unwrap();
+        assert_eq!(db.games().unwrap()[0].preferred, None);
+    }
+
+    #[test]
+    fn preferred_roundtrip_and_menu_order() {
+        let db = Db::open_in_memory().unwrap();
+        let id = one_card(
+            &db,
+            vec![
+                pe(Platform::Steam, "s", "X", false, None),
+                pe(Platform::Epic, "ns:item", "X", false, None),
+                pe(Platform::Gog, "g", "X - Amazon Prime", false, None),
+            ],
+        );
+        db.set_preferred(id, Platform::Epic, Some("ns:item")).unwrap();
+        let g = &db.games().unwrap()[0];
+        assert_eq!(g.preferred, Some((Platform::Epic, "ns:item".to_string())));
+        assert_eq!(g.default_entry, g.preferred);
+        let order: Vec<&str> = g.entries.iter().map(|e| e.platform_id.as_str()).collect();
+        assert_eq!(order, ["ns:item", "s", "g"]);
+        assert_eq!(g.entries[2].copy.as_deref(), Some("Prime"));
+        db.set_preferred(id, Platform::Gog, None).unwrap();
+        assert_eq!(db.games().unwrap()[0].preferred, Some((Platform::Gog, "g".to_string())));
+        // A preference for a vanished entry is ignored.
+        db.set_preferred(id, Platform::Gog, Some("gone")).unwrap();
+        assert_eq!(db.games().unwrap()[0].preferred, None);
+    }
+
+    #[test]
+    fn default_entry_rules() {
+        let db = Db::open_in_memory().unwrap();
+        // Installed: latest played wins over platform priority.
+        one_card(
+            &db,
+            vec![pe(Platform::Steam, "s", "X", true, Some(10)), pe(Platform::Gog, "g", "X", true, Some(20)), pe(Platform::Epic, "e", "X", false, Some(99))],
+        );
+        assert_eq!(db.games().unwrap()[0].default_entry, Some((Platform::Gog, "g".to_string())));
+        // Tie: platform priority.
+        one_card(&db, vec![pe(Platform::Gog, "g", "X", true, None), pe(Platform::Steam, "s", "X", true, None)]);
+        assert_eq!(db.games().unwrap()[0].default_entry, Some((Platform::Steam, "s".to_string())));
+        // Nothing installed: non-Original first, then platform priority.
+        one_card(
+            &db,
+            vec![pe(Platform::Steam, "s", "X", false, None), pe(Platform::Gog, "g", "X Remastered", false, None), pe(Platform::Epic, "e", "X Remastered", false, None)],
+        );
+        assert_eq!(db.games().unwrap()[0].default_entry, Some((Platform::Epic, "e".to_string())));
+    }
+
+    #[test]
+    fn original_card_keeps_row_and_cover_across_rescan() {
+        let db = Db::open_in_memory().unwrap();
+        let es = |extra: bool| {
+            let mut v = vec![pe(Platform::Steam, "7670", "BioShock", false, None)];
+            if extra {
+                v.push(pe(Platform::Steam, "409710", "BioShock Remastered", false, None));
+            }
+            v
+        };
+        let groups = |es: Vec<PlatformEntry>| crate::merge::group(es, &[]);
+        db.replace_entries(groups(es(false))).unwrap();
+        let g = &db.games().unwrap()[0];
+        assert_eq!(g.title, "BioShock");
+        let id = g.id;
+        db.set_cover(id, "c.webp").unwrap();
+        db.replace_entries(groups(es(true))).unwrap();
+        let games = db.games().unwrap();
+        assert_eq!(games.len(), 2);
+        let orig = games.iter().find(|g| g.norm_title == "bioshock").unwrap();
+        assert_eq!((orig.id, orig.cover_path.as_deref()), (id, Some("c.webp")));
+        let rem = games.iter().find(|g| g.norm_title == "bioshock|Remastered").unwrap();
+        assert_eq!(rem.title, "BioShock Remastered");
+        assert_eq!(rem.cover_path, None);
+    }
+
+    #[test]
+    fn card_titles_from_display_base_and_label() {
+        let db = Db::open_in_memory().unwrap();
+        db.replace_entries(crate::merge::group(
+            vec![
+                pe(Platform::Gog, "1", "BioShock™ Remastered - Amazon Prime", false, None),
+                pe(Platform::Gog, "2", "BioShock Infinite: Complete Edition", false, None),
+                pe(Platform::Gog, "3", "BioShock™", false, None),
+            ],
+            &[],
+        ))
+        .unwrap();
+        let mut t: Vec<String> = db.games().unwrap().into_iter().map(|g| g.title).collect();
+        t.sort();
+        assert_eq!(t, ["BioShock", "BioShock Infinite Complete Edition", "BioShock Remastered"]);
+    }
+
+    /// Dry run on a COPY of the live DB: `HANGAR_DB=<copy> HANGAR_DRY_OUT=<report.md> cargo test -p
+    /// hangar-core dry_run_live_cards -- --ignored`. Never opens the live file for writing.
+    #[test]
+    #[ignore]
+    fn dry_run_live_cards() {
+        use std::collections::BTreeMap;
+        use std::fmt::Write;
+        let (Ok(src), Ok(out)) = (std::env::var("HANGAR_DB"), std::env::var("HANGAR_DRY_OUT")) else {
+            return;
+        };
+        let db = Db::open(Path::new(&src)).unwrap();
+        let before = db.games().unwrap();
+        let entries: Vec<PlatformEntry> = before.iter().flat_map(|g| g.entries.clone()).collect();
+        let overrides = db.overrides().unwrap();
+        let groups = crate::merge::group(entries.clone(), &overrides);
+        let mut cards: Vec<(String, String, Vec<String>)> = groups
+            .iter()
+            .map(|(k, es)| {
+                let display = es.iter().min_by_key(|e| rank(e.platform)).unwrap();
+                let ed = edition_of(&display.title);
+                let title = if ed.label == "Orijinal" {
+                    display_base(&display.title)
+                } else {
+                    format!("{} {}", display_base(&display.title), ed.label)
+                };
+                let list = es.iter().map(|e| format!("{}:{} ({})", e.platform.as_str(), e.platform_id, e.title)).collect();
+                (title, k.clone(), list)
+            })
+            .collect();
+        cards.sort();
+        let mut r = String::new();
+        writeln!(r, "# Dry run: kartlar
+
+Entries: {}
+Cards before: {}
+Cards after: {}
+", entries.len(), before.len(), cards.len()).unwrap();
+        writeln!(r, "## Cards with more than one entry
+").unwrap();
+        for (title, key, list) in cards.iter().filter(|c| c.2.len() > 1) {
+            writeln!(r, "- **{title}** `{key}` ({})", list.len()).unwrap();
+            for l in list {
+                writeln!(r, "    - {l}").unwrap();
+            }
+        }
+        let mut by_base: BTreeMap<String, Vec<&str>> = BTreeMap::new();
+        for (title, key, _) in &cards {
+            let base = key.split(['|', '#']).next().unwrap_or(key).to_string();
+            by_base.entry(base).or_default().push(title.as_str());
+        }
+        writeln!(r, "
+## Base names with several cards
+").unwrap();
+        for (base, titles) in by_base.iter().filter(|(_, t)| t.len() > 1) {
+            writeln!(r, "- {base}: {}", titles.join(" | ")).unwrap();
+        }
+        std::fs::write(out, r).unwrap();
     }
 }

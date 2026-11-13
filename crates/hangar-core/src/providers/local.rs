@@ -41,6 +41,9 @@ impl LibraryProvider for LocalProvider {
                     launch_uri: g.exe_path.clone(),
                     install_uri: None,
                     launch_args: g.args.clone(),
+                    cover_url: None,
+                    edition: None,
+                    copy: None,
                 }
             })
             .collect())

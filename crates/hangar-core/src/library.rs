@@ -40,6 +40,9 @@ pub fn scan_all(
                             if o.install_uri.is_some() {
                                 e.install_uri = o.install_uri;
                             }
+                            if e.cover_url.is_none() {
+                                e.cover_url = o.cover_url;
+                            }
                         }
                         None => entries.push(o),
                     }
@@ -72,12 +75,40 @@ pub fn launch_target(entry: &PlatformEntry, launch: &str) -> LaunchTarget {
     }
 }
 
-pub fn resolve(game: &Game, want: Option<Platform>) -> Option<(&PlatformEntry, String)> {
-    let find = |p: Platform| game.entries.iter().find(|e| e.platform == p);
+/// Picks the entry to launch: an explicit (platform, platform_id) request (platform alone = first
+/// entry of that platform in menu order), else the game's default entry, else preferred, else
+/// platform priority.
+pub fn resolve<'a>(
+    game: &'a Game,
+    want: Option<Platform>,
+    want_id: Option<&str>,
+) -> Option<(&'a PlatformEntry, String)> {
+    let by_key = |k: &(Platform, String)| {
+        game.entries.iter().find(|e| e.platform == k.0 && e.platform_id == k.1)
+    };
+    // An explicit platform request that matches nothing is a miss, not a reason to launch another copy.
+    if let Some(p) = want {
+        let hit = game
+            .entries
+            .iter()
+            .find(|e| e.platform == p && want_id.is_none_or(|id| e.platform_id == id));
+        if hit.is_none() && want_id.is_some() {
+            return None;
+        }
+    }
     let e = want
-        .and_then(find)
-        .or_else(|| game.preferred.and_then(find))
-        .or_else(|| Platform::ALL.into_iter().find_map(find))?;
+        .and_then(|p| {
+            game.entries
+                .iter()
+                .find(|e| e.platform == p && want_id.is_none_or(|id| e.platform_id == id))
+        })
+        .or_else(|| game.default_entry.as_ref().and_then(by_key))
+        .or_else(|| game.preferred.as_ref().and_then(by_key))
+        .or_else(|| {
+            game.entries
+                .iter()
+                .min_by_key(|e| Platform::ALL.iter().position(|x| *x == e.platform))
+        })?;
     let uri = if e.installed {
         e.launch_uri.clone()
     } else {
@@ -119,6 +150,9 @@ mod tests {
             launch_uri: format!("launch:{id}"),
             install_uri: Some(format!("install:{id}")),
             launch_args: vec![],
+            cover_url: None,
+            edition: None,
+            copy: None,
         }
     }
 
@@ -151,6 +185,7 @@ mod tests {
             norm_title: "hades".into(),
             cover_path: None,
             preferred: None,
+            default_entry: None,
             last_launched: None,
             entries: vec![
                 entry(Platform::Riot, "r", "Hades", true),
@@ -158,7 +193,7 @@ mod tests {
                 entry(Platform::Local, "l", "Hades", true),
             ],
         };
-        assert_eq!(resolve(&g, None).unwrap().0.platform, Platform::Steam);
+        assert_eq!(resolve(&g, None, None).unwrap().0.platform, Platform::Steam);
     }
 
     #[test]
@@ -176,11 +211,11 @@ mod tests {
         ];
         scan_all(&db, &provs, vec![]).unwrap();
         let id = db.games().unwrap()[0].id;
-        db.set_preferred(id, Platform::Epic).unwrap();
+        db.set_preferred(id, Platform::Epic, None).unwrap();
         scan_all(&db, &provs, vec![]).unwrap();
         let g = &db.games().unwrap()[0];
         assert_eq!(g.id, id);
-        assert_eq!(g.preferred, Some(Platform::Epic));
+        assert_eq!(g.preferred, Some((Platform::Epic, "e".to_string())));
     }
 
     #[test]
@@ -250,6 +285,18 @@ mod tests {
     }
 
     #[test]
+    fn owned_cover_url_copied_to_installed() {
+        let db = Db::open_in_memory().unwrap();
+        let installed = entry(Platform::Epic, "Fig", "Death's Door", true);
+        let mut owned = entry(Platform::Epic, "Fig", "Deaths Door", false);
+        owned.cover_url = Some("https://i/tall.jpg".into());
+        scan_all(&db, &[fake(Platform::Epic, vec![installed])], vec![(Platform::Epic, Ok(vec![owned]))]).unwrap();
+        let g = db.games().unwrap().remove(0);
+        assert_eq!(g.title, "Death's Door");
+        assert_eq!(g.entries[0].cover_url.as_deref(), Some("https://i/tall.jpg"));
+    }
+
+    #[test]
     fn owned_ids_do_not_cross_platforms() {
         let db = Db::open_in_memory().unwrap();
         scan_all(&db, &[fake(Platform::Steam, vec![entry(Platform::Steam, "1", "Hades", true)])],
@@ -289,7 +336,8 @@ mod tests {
             title: "T".into(),
             norm_title: "t".into(),
             cover_path: None,
-            preferred,
+            preferred: preferred.map(|p| (p, "e".to_string())),
+            default_entry: None,
             last_launched: None,
             entries,
         }
@@ -304,21 +352,28 @@ mod tests {
             ],
             None,
         );
-        let (e, uri) = resolve(&g, None).unwrap();
+        let (e, uri) = resolve(&g, None, None).unwrap();
         assert_eq!(e.platform, Platform::Steam);
         assert_eq!(uri, "launch:1");
         let g2 = game_with(g.entries.clone(), Some(Platform::Epic));
-        assert_eq!(resolve(&g2, None).unwrap().0.platform, Platform::Epic);
+        assert_eq!(resolve(&g2, None, None).unwrap().0.platform, Platform::Epic);
         assert_eq!(
-            resolve(&g2, Some(Platform::Ubisoft)).unwrap().0.platform,
+            resolve(&g2, Some(Platform::Ubisoft), None).unwrap().0.platform,
             Platform::Epic
         );
     }
 
     #[test]
+    fn resolve_unknown_platform_id_is_none() {
+        let g = game_with(vec![entry(Platform::Steam, "1", "T", true)], None);
+        assert!(resolve(&g, Some(Platform::Steam), Some("zzz")).is_none());
+        assert!(resolve(&g, Some(Platform::Steam), Some("1")).is_some());
+    }
+
+    #[test]
     fn resolve_uninstalled_returns_install_uri() {
         let g = game_with(vec![entry(Platform::Epic, "e", "T", false)], None);
-        assert_eq!(resolve(&g, None).unwrap().1, "install:e");
+        assert_eq!(resolve(&g, None, None).unwrap().1, "install:e");
     }
 
     #[test]

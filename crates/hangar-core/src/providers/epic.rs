@@ -49,6 +49,9 @@ pub fn parse_item(json: &str) -> Option<PlatformEntry> {
         ),
         install_uri: Some("com.epicgames.launcher://store".to_string()),
         launch_args: vec![],
+        cover_url: None,
+        edition: None,
+        copy: None,
     })
 }
 

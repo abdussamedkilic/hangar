@@ -9,7 +9,7 @@ pub struct Override {
     pub merged: bool,
 }
 
-const SUFFIXES: [&str; 8] = [
+const SUFFIXES: [&str; 13] = [
     "ultimate edition",
     "definitive edition",
     "game of the year edition",
@@ -18,6 +18,11 @@ const SUFFIXES: [&str; 8] = [
     "complete edition",
     "remastered",
     "director's cut",
+    "enhanced edition",
+    "special edition",
+    "gold edition",
+    "anniversary edition",
+    "amazon prime",
 ];
 
 fn clean(s: &str) -> String {
@@ -49,46 +54,111 @@ fn clean(s: &str) -> String {
 /// 6. Repeatedly strip a trailing edition suffix, then trim. Suffixes (each normalized with steps
 ///    1-5 before comparing): `ultimate edition`, `definitive edition`,
 ///    `game of the year edition`, `goty`, `deluxe edition`, `complete edition`, `remastered`,
-///    `director's cut`. Rule: the suffix must be trailing and a whole word (preceded by a space),
-///    and is never stripped if the title would become empty.
+///    `director's cut`, `enhanced edition`, `special edition`, `gold edition`,
+///    `anniversary edition`, `amazon prime`. Rule: the suffix must be trailing and a whole word
+///    (preceded by a space), and is never stripped if the title would become empty.
 pub fn normalize(title: &str) -> String {
+    strip_suffixes(title).0
+}
+
+/// Runs the `normalize` suffix loop; returns the key and the dropped suffixes (outermost first).
+fn strip_suffixes(title: &str) -> (String, Vec<&'static str>) {
     let mut t = clean(title);
+    let mut dropped = Vec::new();
     loop {
-        let hit = SUFFIXES.iter().map(|s| clean(s)).find(|s| {
+        let hit = SUFFIXES.iter().map(|s| (*s, clean(s))).find(|(_, s)| {
             t.strip_suffix(s.as_str())
                 .is_some_and(|rest| rest.ends_with(' '))
         });
         match hit {
-            Some(s) => t.truncate(t.len() - s.len()),
+            Some((raw, s)) => {
+                t.truncate(t.len() - s.len());
+                dropped.push(raw);
+            }
             None => break,
         }
         t = t.trim().to_string();
     }
-    t
+    (t, dropped)
 }
 
-/// Groups entries by normalized title. Overrides are order-independent: all `merged=true` overrides
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize)]
+pub struct Edition {
+    pub label: String,
+    pub copy: Option<String>,
+}
+
+fn edition_label(suffix: &str) -> Option<&'static str> {
+    Some(match suffix {
+        "remastered" => "Remastered",
+        "complete edition" => "Complete Edition",
+        "goty" | "game of the year edition" => "GOTY",
+        "definitive edition" => "Definitive Edition",
+        "ultimate edition" => "Ultimate Edition",
+        "deluxe edition" => "Deluxe Edition",
+        "director's cut" => "Director's Cut",
+        "enhanced edition" => "Enhanced Edition",
+        "special edition" => "Special Edition",
+        "gold edition" => "Gold Edition",
+        "anniversary edition" => "Anniversary Edition",
+        _ => return None,
+    })
+}
+
+/// Edition label (first dropped edition suffix, else "Orijinal") and copy marker (Prime).
+pub fn edition_of(title: &str) -> Edition {
+    let dropped = strip_suffixes(title).1;
+    let copy = dropped.contains(&"amazon prime").then(|| "Prime".to_string());
+    let label = dropped
+        .iter()
+        .find_map(|s| edition_label(s))
+        .unwrap_or("Orijinal")
+        .to_string();
+    Edition { label, copy }
+}
+
+/// Readable base title: marks removed and the suffixes `normalize` drops trimmed off the end.
+pub fn display_base(title: &str) -> String {
+    let stripped: String = title.chars().filter(|c| !matches!(c, '™' | '®' | '©')).collect();
+    let target = normalize(title);
+    let words: Vec<&str> = stripped.split_whitespace().collect();
+    for k in (1..=words.len()).rev() {
+        let prefix = words[..k].join(" ");
+        if clean(&prefix) == target {
+            let r = prefix.trim_end_matches(|c: char| matches!(c, '-' | ':' | ',') || c.is_whitespace());
+            if !r.is_empty() {
+                return r.to_string();
+            }
+            break;
+        }
+    }
+    title.trim().to_string()
+}
+
+/// Groups entries by group key (normalized title, plus `|edition` unless Original). Overrides are order-independent: all `merged=true` overrides
 /// are unioned first (set key = lowest member norm), then `merged=false` splits are evaluated
 /// against that snapshot; a split moves only `b` (to key `<norm_b>#<platform>:<id>`).
 pub fn group(
     entries: Vec<PlatformEntry>,
     overrides: &[Override],
 ) -> Vec<(String, Vec<PlatformEntry>)> {
-    let norms: Vec<String> = entries.iter().map(|e| normalize(&e.title)).collect();
-    // Same-platform entries with an equal norm are never auto-grouped: the later one (by
-    // platform_id) is a "dup" and keeps its own key. Explicit merge overrides may still join it.
-    let mut order: Vec<usize> = (0..entries.len()).collect();
-    order.sort_by(|&a, &b| {
-        (entries[a].platform_id.as_str(), entries[a].platform.as_str())
-            .cmp(&(entries[b].platform_id.as_str(), entries[b].platform.as_str()))
-    });
-    let mut seen: std::collections::HashSet<(&str, Platform)> = Default::default();
-    let mut dup = vec![false; entries.len()];
-    for &i in &order {
-        // Local entries are never auto-merged: treated like a dup so they keep their own key.
-        dup[i] = entries[i].platform == Platform::Local
-            || !seen.insert((norms[i].as_str(), entries[i].platform));
-    }
+    let editions: Vec<Edition> = entries.iter().map(|e| edition_of(&e.title)).collect();
+    // Group key: one card = one build. Remastered, Complete Edition, ... are separate cards; the
+    // Original keeps the plain normalized title (so existing games rows survive).
+    let norms: Vec<String> = entries
+        .iter()
+        .zip(&editions)
+        .map(|(e, ed)| {
+            let n = normalize(&e.title);
+            if ed.label == "Orijinal" {
+                n
+            } else {
+                format!("{n}|{}", ed.label)
+            }
+        })
+        .collect();
+    // Local entries are never auto-merged: they keep their own key. Same-store copies share a card.
+    let dup: Vec<bool> = entries.iter().map(|e| e.platform == Platform::Local).collect();
     let eff: Vec<String> = (0..entries.len())
         .map(|i| {
             if dup[i] {
@@ -181,6 +251,9 @@ mod tests {
             launch_uri: String::new(),
             install_uri: None,
             launch_args: vec![],
+            cover_url: None,
+            edition: None,
+            copy: None,
         }
     }
 
@@ -256,25 +329,27 @@ mod tests {
     }
 
     #[test]
-    fn same_platform_equal_norm_not_grouped() {
-        let es = || {
+    fn same_platform_equal_norm_grouped() {
+        let g = group(
             vec![
                 e(Platform::Steam, "2", "Hades"),
                 e(Platform::Steam, "1", "Hades"),
                 e(Platform::Epic, "x", "Hades"),
-            ]
-        };
-        let g = group(es(), &[]);
-        assert_eq!(g.len(), 2);
+            ],
+            &[],
+        );
+        assert_eq!(g.len(), 1);
         assert_eq!(g[0].0, "hades");
-        assert_eq!(g[0].1.len(), 2);
-        assert_eq!(g[1].0, "hades#steam:2");
+        assert_eq!(g[0].1.len(), 3);
+        let es = || vec![e(Platform::Steam, "2", "Hades"), e(Platform::Steam, "1", "Hades")];
         let o = Override {
             a: (Platform::Steam, "1".into()),
             b: (Platform::Steam, "2".into()),
-            merged: true,
+            merged: false,
         };
-        assert_eq!(group(es(), &[o]).len(), 1);
+        let g = group(es(), &[o]);
+        assert_eq!(g.len(), 2);
+        assert!(g.iter().any(|(k, _)| k == "hades#steam:2"));
     }
 
     #[test]
@@ -341,6 +416,128 @@ mod tests {
         assert_eq!(g1.len(), 1);
         assert_eq!(g1[0].0, "alpha");
         assert_eq!(g1[0].1.len(), 3);
+    }
+
+    #[test]
+    fn normalize_new_suffixes() {
+        assert_eq!(normalize("BioShock™ Remastered - Amazon Prime"), "bioshock");
+        assert_eq!(normalize("Hades - Amazon Prime"), "hades");
+        assert_eq!(normalize("Baldur's Gate Enhanced Edition"), "baldur s gate");
+        assert_eq!(normalize("BioShock 2"), "bioshock 2");
+    }
+
+    #[test]
+    fn edition_labels() {
+        assert_eq!(edition_of("BioShock"), Edition { label: "Orijinal".into(), copy: None });
+        assert_eq!(edition_of("BioShock™ Remastered"), Edition { label: "Remastered".into(), copy: None });
+        assert_eq!(edition_of("BioShock™ Remastered - Amazon Prime"), Edition { label: "Remastered".into(), copy: Some("Prime".into()) });
+        assert_eq!(edition_of("BioShock Infinite: Complete Edition"), Edition { label: "Complete Edition".into(), copy: None });
+        assert_eq!(edition_of("Hades - Amazon Prime"), Edition { label: "Orijinal".into(), copy: Some("Prime".into()) });
+    }
+
+    #[test]
+    fn display_base_cases() {
+        assert_eq!(display_base("BioShock™ Remastered - Amazon Prime"), "BioShock");
+        assert_eq!(display_base("BioShock Infinite: Complete Edition"), "BioShock Infinite");
+        assert_eq!(display_base("BioShock® 2"), "BioShock 2");
+        assert_eq!(display_base("Death's Door"), "Death's Door");
+    }
+
+    #[test]
+    fn display_base_never_empty() {
+        assert_eq!(display_base("Remastered"), "Remastered");
+    }
+
+    fn bioshock_entries() -> Vec<PlatformEntry> {
+        use Platform::*;
+        vec![
+            e(Steam, "7670", "BioShock"),
+            e(Steam, "409710", "BioShock Remastered"),
+            e(Gog, "2022341186", "BioShock™"),
+            e(Gog, "1439656515", "BioShock™ Remastered"),
+            e(Gog, "1157510446", "BioShock™ Remastered - Amazon Prime"),
+            e(Epic, "e1", "BioShock Remastered"),
+            e(Steam, "8850", "BioShock 2"),
+            e(Steam, "409720", "BioShock 2 Remastered"),
+            e(Gog, "1806891286", "BioShock™ 2"),
+            e(Gog, "1482265668", "BioShock™ 2 Remastered"),
+            e(Gog, "1271128013", "BioShock™ 2 Remastered - Amazon Prime"),
+            e(Epic, "e2", "BioShock 2 Remastered"),
+            e(Steam, "8870", "BioShock Infinite"),
+            e(Gog, "1752654506", "BioShock Infinite Complete Edition"),
+            e(Gog, "1680121572", "BioShock Infinite Complete Edition - Amazon Prime"),
+            e(Epic, "e3", "BioShock Infinite: Complete Edition"),
+        ]
+    }
+
+    #[test]
+    fn bioshock_family() {
+        let g = group(bioshock_entries(), &[]);
+        let got: Vec<(&str, usize)> = g.iter().map(|(k, v)| (k.as_str(), v.len())).collect();
+        assert_eq!(
+            got,
+            vec![
+                ("bioshock", 2),
+                ("bioshock 2", 2),
+                ("bioshock 2|Remastered", 4),
+                ("bioshock infinite", 1),
+                ("bioshock infinite|Complete Edition", 3),
+                ("bioshock|Remastered", 4),
+            ]
+        );
+        // The Original card keeps the plain normalized key.
+        assert_eq!(g[0].0, normalize("BioShock™"));
+    }
+
+    #[test]
+    fn every_edition_suffix_is_its_own_card() {
+        for s in SUFFIXES.iter().filter(|s| **s != "amazon prime") {
+            let title = format!("Foo {s}");
+            assert_ne!(edition_of(&title).label, "Orijinal", "{s}");
+            let g = group(vec![e(Platform::Steam, "1", "Foo"), e(Platform::Epic, "x", &title)], &[]);
+            assert_eq!(g.len(), 2, "{s}");
+        }
+    }
+
+    #[test]
+    fn same_store_duplicates_share_card() {
+        let g = group(
+            vec![
+                e(Platform::Gog, "1449710114", "Mafia II: Definitive Edition"),
+                e(Platform::Gog, "1943447848", "Mafia II: Definitive Edition"),
+            ],
+            &[],
+        );
+        assert_eq!(g.len(), 1);
+        assert_eq!(g[0].1.len(), 2);
+    }
+
+    #[test]
+    fn split_override_still_wins() {
+        let o = Override {
+            a: (Platform::Steam, "409710".into()),
+            b: (Platform::Gog, "1439656515".into()),
+            merged: false,
+        };
+        let g = group(bioshock_entries(), &[o]);
+        assert_eq!(g.len(), 7);
+        let alone = g
+            .iter()
+            .find(|(_, es)| es.iter().any(|x| x.platform_id == "1439656515"))
+            .unwrap();
+        assert_eq!(alone.1.len(), 1);
+        assert_eq!(alone.0, "bioshock|Remastered#gog:1439656515");
+    }
+
+    #[test]
+    fn manual_merge_joins_editions() {
+        let o = Override {
+            a: (Platform::Steam, "7670".into()),
+            b: (Platform::Steam, "409710".into()),
+            merged: true,
+        };
+        let g = group(bioshock_entries(), &[o]);
+        assert_eq!(g.len(), 5);
     }
 
     #[test]

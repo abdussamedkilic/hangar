@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { counts, defaultPlatform, isInstalled, normalize, view, type Game, type Platform, type PlatformEntry } from "./library";
+import { counts, currentEntry, isInstalled, normalize, view, type Game, type Platform, type PlatformEntry } from "./library";
 
 const entry = (platform: Platform, o: Partial<PlatformEntry> = {}): PlatformEntry => ({
   platform, platform_id: "1", title: "t", installed: false, install_path: null, size_bytes: null,
@@ -20,6 +20,10 @@ describe("normalize (parity with Rust)", () => {
     expect(normalize("DEATH STRANDING™")).toBe(normalize("Death Stranding"));
     expect(normalize("Doom - Director's Cut")).toBe("doom");
     expect(normalize("Game of the Year Edition")).toBe("game of the year edition");
+    expect(normalize("BioShock™ Remastered - Amazon Prime")).toBe("bioshock");
+    expect(normalize("Hades - Amazon Prime")).toBe("hades");
+    expect(normalize("Baldur's Gate Enhanced Edition")).toBe("baldur s gate");
+    expect(normalize("BioShock 2")).toBe("bioshock 2");
   });
 });
 
@@ -54,11 +58,12 @@ describe("view", () => {
   });
 });
 
-describe("defaultPlatform / isInstalled / counts", () => {
-  it("prefers preferred > steam > epic > ubisoft", () => {
-    expect(defaultPlatform(game("a", [entry("ubisoft"), entry("epic")]))).toBe("epic");
-    expect(defaultPlatform(game("a", [entry("epic"), entry("steam")]))).toBe("steam");
-    expect(defaultPlatform(game("a", [entry("steam"), entry("epic")], { preferred: "epic" }))).toBe("epic");
+describe("currentEntry / isInstalled / counts", () => {
+  it("uses default_entry, else the first entry", () => {
+    const g = game("a", [entry("steam", { platform_id: "1" }), entry("epic", { platform_id: "2" })]);
+    expect(currentEntry(g).platform).toBe("steam");
+    expect(currentEntry({ ...g, default_entry: ["epic", "2"] }).platform).toBe("epic");
+    expect(currentEntry({ ...g, default_entry: ["epic", "zzz"] }).platform).toBe("steam");
   });
   it("isInstalled", () => {
     expect(isInstalled(game("a", [entry("steam"), entry("epic", { installed: true })]))).toBe(true);

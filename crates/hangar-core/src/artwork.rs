@@ -1,5 +1,5 @@
 use crate::db::Db;
-use crate::merge::normalize;
+use crate::merge::{edition_of, normalize};
 use crate::model::{Game, Platform};
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -23,17 +23,44 @@ pub fn steam_cdn_url(appid: &str) -> String {
 }
 
 /// First store-search result whose normalized name equals `norm_title`; returns its appid.
-pub fn parse_store_search(json: &str, norm_title: &str) -> Option<String> {
+pub fn parse_store_search(json: &str, norm_title: &str, edition_label: &str) -> Option<String> {
     let v: serde_json::Value = serde_json::from_str(json).ok()?;
     v.get("items")?.as_array()?.iter().find_map(|it| {
         let name = it.get("name")?.as_str()?;
-        (normalize(name) == norm_title).then(|| it.get("id")?.as_u64().map(|i| i.to_string()))?
+        (normalize(name) == norm_title && edition_of(name).label == edition_label).then(|| it.get("id")?.as_u64().map(|i| i.to_string()))?
     })
 }
 
+/// Cover/API downloads are limited to known image hosts: https, no userinfo, no explicit port.
+pub fn is_allowed_cover_url(url: &str) -> bool {
+    let Ok(u) = url::Url::parse(url) else { return false };
+    if u.scheme() != "https" || !u.username().is_empty() || u.password().is_some() || u.port().is_some() {
+        return false;
+    }
+    let host = u.host_str().unwrap_or("");
+    let sub = |d: &str| host.ends_with(&format!(".{d}"));
+    sub("epicgames.com")
+        || sub("unrealengine.com")
+        || sub("steamstatic.com")
+        || ["images.gog.com", "images.gog-statics.com", "api.gog.com", "steamcdn-a.akamaihd.net"].contains(&host)
+}
+
+/// Like `get_bytes` but only for allowed hosts, and redirects are not followed.
+fn get_bytes_allowed(url: &str) -> Option<Vec<u8>> {
+    if !is_allowed_cover_url(url) {
+        return None;
+    }
+    fetch(url, &[], 0)
+}
+
 fn get_bytes(url: &str, query: &[(&str, &str)]) -> Option<Vec<u8>> {
+    fetch(url, query, 5)
+}
+
+fn fetch(url: &str, query: &[(&str, &str)], redirects: u32) -> Option<Vec<u8>> {
     let agent = ureq::AgentBuilder::new()
         .timeout(Duration::from_secs(10))
+        .redirects(redirects)
         .build();
     let mut req = agent.get(url);
     for (k, v) in query {
@@ -54,19 +81,76 @@ fn get_bytes(url: &str, query: &[(&str, &str)]) -> Option<Vec<u8>> {
     Some(buf)
 }
 
-pub fn is_image(bytes: &[u8]) -> bool {
-    bytes.starts_with(&[0xFF, 0xD8, 0xFF]) || bytes.starts_with(&[0x89, 0x50, 0x4E, 0x47])
+fn is_webp(bytes: &[u8]) -> bool {
+    bytes.len() >= 12 && &bytes[0..4] == b"RIFF" && &bytes[8..12] == b"WEBP"
 }
 
-fn find_appid(game: &Game) -> Option<String> {
-    if let Some(e) = game.entries.iter().find(|e| e.platform == Platform::Steam) {
-        return Some(e.platform_id.clone());
+pub fn is_image(bytes: &[u8]) -> bool {
+    bytes.starts_with(&[0xFF, 0xD8, 0xFF]) || bytes.starts_with(&[0x89, 0x50, 0x4E, 0x47]) || is_webp(bytes)
+}
+
+/// File extension from magic bytes (call only on `is_image` data).
+fn image_ext(bytes: &[u8]) -> &'static str {
+    if bytes.starts_with(&[0x89, 0x50, 0x4E, 0x47]) {
+        "png"
+    } else if is_webp(bytes) {
+        "webp"
+    } else {
+        "jpg"
     }
+}
+
+/// Where a cover may come from, in the order `ensure_cover` tries them.
+#[derive(Debug, PartialEq)]
+pub enum Candidate {
+    Steam(String),
+    Url(String),
+    /// GOG public API box art for a numeric GOG id.
+    GogApi(String),
+    SteamSearch,
+}
+
+pub fn cover_candidates(game: &Game) -> Vec<Candidate> {
+    let mut out: Vec<Candidate> = game
+        .entries
+        .iter()
+        .find(|e| e.platform == Platform::Steam)
+        .map(|e| Candidate::Steam(e.platform_id.clone()))
+        .into_iter()
+        .collect();
+    out.extend(Platform::ALL
+        .iter()
+        .filter_map(|p| game.entries.iter().find(|e| e.platform == *p && e.cover_url.is_some()))
+        .filter_map(|e| e.cover_url.clone())
+        .map(Candidate::Url));
+    if let Some(e) = game
+        .entries
+        .iter()
+        .find(|e| e.platform == Platform::Gog && !e.platform_id.is_empty() && e.platform_id.bytes().all(|b| b.is_ascii_digit()))
+    {
+        out.push(Candidate::GogApi(e.platform_id.clone()));
+    }
+    out.push(Candidate::SteamSearch);
+    out
+}
+
+/// `_links.boxArtImage.href` of GOG's `/v2/games/<id>` response; https only.
+pub fn gog_box_art(json: &str) -> Option<String> {
+    let v: serde_json::Value = serde_json::from_str(json).ok()?;
+    let href = v.get("_links")?.get("boxArtImage")?.get("href")?.as_str()?;
+    href.starts_with("https://").then(|| href.to_string())
+}
+
+fn search_appid(game: &Game) -> Option<String> {
     let body = get_bytes(
         "https://store.steampowered.com/api/storesearch/",
         &[("term", &game.title), ("l", "english"), ("cc", "US")],
     )?;
-    parse_store_search(std::str::from_utf8(&body).ok()?, &normalize(&game.title))
+    parse_store_search(
+        std::str::from_utf8(&body).ok()?,
+        &normalize(&game.title),
+        &edition_of(&game.title).label,
+    )
 }
 
 /// Largest frame of an ICO that is an embedded PNG. Malformed input yields None.
@@ -114,6 +198,9 @@ fn write_cover(db: &Db, cache_dir: &Path, game: &Game, ext: &str, bytes: Vec<u8>
         let _ = std::fs::remove_file(&tmp);
         return None;
     }
+    for other in ["jpg", "png", "webp"].into_iter().filter(|e| *e != ext) {
+        let _ = std::fs::remove_file(cache_dir.join(format!("{}.{other}", game.id)));
+    }
     let path = dest.to_string_lossy().into_owned();
     db.set_cover(game.id, &path).ok()?;
     Some(path)
@@ -135,9 +222,9 @@ pub fn set_custom_cover(db: &Db, cache_dir: &Path, game_id: i64, src: &Path) -> 
         return Err(too_big());
     }
     if !is_image(&bytes) {
-        return Err("Desteklenmeyen görsel (PNG veya JPG seç)".into());
+        return Err("Desteklenmeyen görsel (PNG, JPG veya WebP seç)".into());
     }
-    let ext = if bytes.starts_with(&[0x89, 0x50, 0x4E, 0x47]) { "png" } else { "jpg" };
+    let ext = image_ext(&bytes);
     std::fs::create_dir_all(cache_dir).map_err(|e| format!("Kapak klasörü oluşturulamadı: {e}"))?;
     // Unique name per pick so the webview URL changes and never serves a cached older image.
     let mut ms = std::time::SystemTime::now()
@@ -155,12 +242,13 @@ pub fn set_custom_cover(db: &Db, cache_dir: &Path, game_id: i64, src: &Path) -> 
         return Err(format!("Kapak kaydedilemedi: {e}"));
     }
     // Only now drop stale files (never the one just written).
-    let (plain_jpg, plain_png) = (format!("{game_id}.jpg"), format!("{game_id}.png"));
+    let (plain_jpg, plain_png, plain_webp) =
+        (format!("{game_id}.jpg"), format!("{game_id}.png"), format!("{game_id}.webp"));
     let custom = format!("{game_id}-custom-");
     if let Ok(rd) = std::fs::read_dir(cache_dir) {
         for e in rd.flatten() {
             let name = e.file_name().to_string_lossy().into_owned();
-            if e.path() != dest && (name == plain_jpg || name == plain_png || name.starts_with(&custom)) {
+            if e.path() != dest && (name == plain_jpg || name == plain_png || name == plain_webp || name.starts_with(&custom)) {
                 let _ = std::fs::remove_file(e.path());
             }
         }
@@ -188,21 +276,45 @@ pub fn ensure_cover(
             return Some(path);
         }
     }
-    let appid = find_appid(game)?;
+    for c in cover_candidates(game) {
+        let fetched: Option<(&'static str, Vec<u8>)> = match c {
+            Candidate::Url(u) => get_bytes_allowed(&u)
+                .filter(|b| is_image(b))
+                .map(|b| (image_ext(&b), b)),
+            Candidate::GogApi(id) => get_bytes_allowed(&format!("https://api.gog.com/v2/games/{id}"))
+                .and_then(|b| gog_box_art(std::str::from_utf8(&b).ok()?))
+                .and_then(|u| get_bytes_allowed(&u))
+                .filter(|b| is_image(b))
+                .map(|b| (image_ext(&b), b)),
+            Candidate::Steam(id) => steam_bytes(steam_root, &id).map(|b| (image_ext(&b), b)),
+            Candidate::SteamSearch => search_appid(game)
+                .and_then(|id| steam_bytes(steam_root, &id))
+                .map(|b| (image_ext(&b), b)),
+        };
+        if let Some((ext, b)) = fetched {
+            if let Some(path) = write_cover(db, cache_dir, game, ext, b) {
+                return Some(path);
+            }
+        }
+    }
+    None
+}
+
+fn steam_bytes(steam_root: Option<&Path>, appid: &str) -> Option<Vec<u8>> {
     let local = steam_root
         .and_then(|r| local_steam_cover(r, &appid))
         .and_then(|p| std::fs::read(p).ok())
         .filter(|b| is_image(b));
     let bytes = local
-        .or_else(|| get_bytes(&steam_cdn_url(&appid), &[]).filter(|b| is_image(b)))
+        .or_else(|| get_bytes(&steam_cdn_url(appid), &[]).filter(|b| is_image(b)))
         .or_else(|| {
             get_bytes(
                 &format!("https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/header.jpg"),
                 &[],
             )
             .filter(|b| is_image(b))
-        })?;
-    write_cover(db, cache_dir, game, "jpg", bytes)
+        });
+    bytes
 }
 
 #[cfg(test)]
@@ -213,15 +325,20 @@ mod tests {
     fn store_search_exact_match() {
         let json = include_str!("../tests/fixtures/artwork/synthetic-storesearch-alan-wake.json");
         assert_eq!(
-            parse_store_search(json, "alan wake 2").as_deref(),
+            parse_store_search(json, "alan wake 2", "Orijinal").as_deref(),
             Some("1000108")
         );
         assert_eq!(
-            parse_store_search(json, "alan wake").as_deref(),
+            parse_store_search(json, "alan wake", "Orijinal").as_deref(),
             Some("108710")
         );
-        assert_eq!(parse_store_search(json, "control"), None);
-        assert_eq!(parse_store_search("not json", "x"), None);
+        assert_eq!(parse_store_search(json, "control", "Orijinal"), None);
+        assert_eq!(parse_store_search("not json", "x", "Orijinal"), None);
+        // A Remastered card must not take the Original's cover (and vice versa).
+        assert_eq!(parse_store_search(json, "alan wake", "Remastered"), None);
+        let rm = r#"{"items":[{"id":1,"name":"Foo"},{"id":2,"name":"Foo Remastered"}]}"#;
+        assert_eq!(parse_store_search(rm, "foo", "Remastered").as_deref(), Some("2"));
+        assert_eq!(parse_store_search(rm, "foo", "Orijinal").as_deref(), Some("1"));
     }
 
     #[test]
@@ -247,6 +364,9 @@ mod tests {
     fn is_image_magic() {
         assert!(is_image(&[0xFF, 0xD8, 0xFF, 0xE0, 1]));
         assert!(is_image(&[0x89, 0x50, 0x4E, 0x47, 0x0D]));
+        assert!(is_image(b"RIFF\x10\0\0\0WEBPVP8 "));
+        assert!(!is_image(b"RIFF\x10\0\0\0WAVEfmt "));
+        assert!(!is_image(b"RIFF"));
         assert!(!is_image(b"<html>404</html>"));
         assert!(!is_image(b""));
     }
@@ -317,6 +437,9 @@ mod tests {
             launch_uri: "x".into(),
             install_uri: None,
             launch_args: vec![],
+            cover_url: None,
+            edition: None,
+            copy: None,
         };
         let db = Db::open_in_memory().unwrap();
         db.replace_entries(vec![("league of legends".into(), vec![entry])]).unwrap();
@@ -343,6 +466,9 @@ mod tests {
             launch_uri: "C:\\H.exe".into(),
             install_uri: None,
             launch_args: vec![],
+            cover_url: None,
+            edition: None,
+            copy: None,
         };
         let db = Db::open_in_memory().unwrap();
         db.replace_entries(vec![("hades".into(), vec![entry])]).unwrap();
@@ -377,7 +503,7 @@ mod tests {
         std::fs::write(&src, b"hello").unwrap();
         let (db, game) = one_game_db();
         let err = set_custom_cover(&db, &root.join("covers"), game.id, &src).unwrap_err();
-        assert_eq!(err, "Desteklenmeyen görsel (PNG veya JPG seç)");
+        assert_eq!(err, "Desteklenmeyen görsel (PNG, JPG veya WebP seç)");
         assert_eq!(db.games().unwrap()[0].cover_path, None);
         std::fs::remove_dir_all(&root).unwrap();
     }
@@ -448,6 +574,120 @@ mod tests {
         assert!(!cache.join(format!("{}.jpg", stale.id)).exists());
         assert_eq!(db.games().unwrap()[0].cover_path.as_deref(), Some(custom.as_str()));
         std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn candidates_keep_urls_after_steam() {
+        let (_, mut g) = one_game_db();
+        let mut steam = g.entries[0].clone();
+        steam.platform = Platform::Steam;
+        steam.platform_id = "620".into();
+        let mut epic = g.entries[0].clone();
+        epic.platform = Platform::Epic;
+        epic.cover_url = Some("https://e".into());
+        g.entries = vec![epic, steam];
+        assert_eq!(
+            cover_candidates(&g),
+            vec![Candidate::Steam("620".into()), Candidate::Url("https://e".into()), Candidate::SteamSearch]
+        );
+    }
+
+    #[test]
+    fn cover_url_allowlist() {
+        for ok in [
+            "https://images.gog.com/a_glx_vertical_cover.webp?namespace=gamesdb",
+            "https://images.gog-statics.com/a.jpg",
+            "https://api.gog.com/v2/games/1",
+            "https://cdn1.epicgames.com/a.jpg",
+            "https://cdn2.unrealengine.com/x.jpg",
+            "https://cdn.cloudflare.steamstatic.com/x.jpg",
+            "https://steamcdn-a.akamaihd.net/x.jpg",
+        ] {
+            assert!(is_allowed_cover_url(ok), "{ok}");
+        }
+        for bad in [
+            "http://images.gog.com/a.jpg",
+            "https://evil.com/a.jpg",
+            "https://images.gog.com.evil.io/a.jpg",
+            "https://user@images.gog.com/a.jpg",
+            "https://images.gog.com:8443/a.jpg",
+            "https://epicgames.com/a.jpg",
+            "https://evil-epicgames.com/a.jpg",
+            "https://evil-unrealengine.com/x.jpg",
+            "https://unrealengine.com/x.jpg",
+            "https://127.0.0.1/a.jpg",
+            "not a url",
+        ] {
+            assert!(!is_allowed_cover_url(bad), "{bad}");
+        }
+    }
+
+    #[test]
+    fn write_cover_removes_other_extension_siblings() {
+        let root = std::env::temp_dir().join(format!("hangar-sib-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let (db, game) = one_game_db();
+        let old = root.join(format!("{}.jpg", game.id));
+        std::fs::write(&old, [0xFF, 0xD8, 0xFF]).unwrap();
+        let p = write_cover(&db, &root, &game, "webp", b"RIFF....WEBP".to_vec()).unwrap();
+        assert!(Path::new(&p).is_file() && !old.exists());
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn gog_box_art_parse() {
+        let j = r#"{"_links":{"boxArtImage":{"href":"https://images.gog-statics.com/abc.jpg"}}}"#;
+        assert_eq!(gog_box_art(j).as_deref(), Some("https://images.gog-statics.com/abc.jpg"));
+        assert_eq!(gog_box_art(r#"{"_links":{"boxArtImage":{"href":"http://x/a.jpg"}}}"#), None);
+        assert_eq!(gog_box_art(r#"{"_links":{}}"#), None);
+        assert_eq!(gog_box_art("nope"), None);
+    }
+
+    #[test]
+    fn image_ext_from_magic() {
+        assert_eq!(image_ext(&fake_png(1)), "png");
+        assert_eq!(image_ext(b"RIFF\x10\0\0\0WEBPVP8 "), "webp");
+        assert_eq!(image_ext(&[0xFF, 0xD8, 0xFF, 0xE0]), "jpg");
+    }
+
+    #[test]
+    fn candidates_order() {
+        let (_, mut g) = one_game_db();
+        let tpl = g.entries[0].clone();
+        let mk = |p: Platform, id: &str, url: Option<&str>| {
+            let mut e = tpl.clone();
+            e.platform = p;
+            e.platform_id = id.into();
+            e.cover_url = url.map(str::to_string);
+            e
+        };
+        // No Steam entry: urls in Platform::ALL order, then the store search.
+        g.entries = vec![mk(Platform::Gog, "1", Some("https://g")), mk(Platform::Epic, "2", Some("https://e")), mk(Platform::Ubisoft, "3", None)];
+        assert_eq!(
+            cover_candidates(&g),
+            vec![Candidate::Url("https://e".into()), Candidate::Url("https://g".into()), Candidate::GogApi("1".into()), Candidate::SteamSearch]
+        );
+        // A Steam entry goes first; the rest remain as fallbacks.
+        g.entries.push(mk(Platform::Steam, "620", None));
+        assert_eq!(
+            cover_candidates(&g),
+            vec![
+                Candidate::Steam("620".into()),
+                Candidate::Url("https://e".into()),
+                Candidate::Url("https://g".into()),
+                Candidate::GogApi("1".into()),
+                Candidate::SteamSearch
+            ]
+        );
+        // GOG entry without cover_url and a non-numeric id: no API candidate.
+        g.entries = vec![mk(Platform::Gog, "abc", None)];
+        assert_eq!(cover_candidates(&g), vec![Candidate::SteamSearch]);
+        g.entries = vec![mk(Platform::Gog, "77", None)];
+        assert_eq!(cover_candidates(&g), vec![Candidate::GogApi("77".into()), Candidate::SteamSearch]);
+        // Nothing with a url: search only.
+        g.entries = vec![mk(Platform::Local, "9", None)];
+        assert_eq!(cover_candidates(&g), vec![Candidate::SteamSearch]);
     }
 
     #[test]

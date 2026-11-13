@@ -60,8 +60,8 @@ kbd{font:500 11px var(--f-disp);border:1px solid var(--line);border-radius:4px;p
 .card.sel .cover{outline:2px solid var(--accent)}
 .card .cn{font-size:12.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .badges{position:absolute;top:6px;left:6px;right:6px;z-index:2;display:flex;justify-content:space-between}
-.pg{display:flex;gap:3px}
-.pg b{font:700 9px var(--f-disp);background:rgba(10,12,16,.75);padding:2px 4px;border-radius:3px}
+.pg{display:flex;gap:3px;min-width:0;flex-wrap:nowrap;overflow:hidden}
+.pg b{flex:none;font:700 9px var(--f-disp);background:rgba(10,12,16,.75);padding:2px 4px;border-radius:3px}
 .dot{width:8px;height:8px;border-radius:50%;background:var(--installed);box-shadow:0 0 0 2px rgba(10,12,16,.75)}
 .notinst .dot{background:transparent;border:1.5px solid var(--dim)}
 .notinst .cover{opacity:.55}
@@ -74,6 +74,7 @@ kbd{font:500 11px var(--f-disp);border:1px solid var(--line);border-radius:4px;p
 .play-menu{position:absolute;top:calc(100% + 6px);left:0;min-width:100%;z-index:20;display:flex;flex-direction:column;background:var(--raise);border:1px solid var(--line);border-radius:8px;padding:4px}
 .play-menu button{padding:9px 10px;font-size:13px;border-radius:5px;text-align:left;white-space:nowrap}
 .play-menu button:hover{background:var(--line)}
+.play-menu .alt-title{display:block;color:var(--dim);font-size:11px;max-width:260px;overflow:hidden;text-overflow:ellipsis}
 
 @media (max-width:820px){.app{grid-template-columns:minmax(0,1fr)}.app aside{display:none}.stage{grid-template-columns:1fr}.stage .cover{display:none}}
 
@@ -126,3 +127,4 @@ kbd{font:500 11px var(--f-disp);border:1px solid var(--line);border-radius:4px;p
 .scanlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;max-height:240px;overflow:auto}
 .scanlist li{display:flex;align-items:center;gap:8px;justify-content:space-between}
 .scanlist li>div{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
+.pick-stores{opacity:.65;font-size:11px;margin-left:6px;white-space:nowrap}

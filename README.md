@@ -32,7 +32,7 @@ Anahtar girilmezse yalnızca kurulu Steam oyunları listelenir. Sahip olunan tü
 
 Epic hesabını bağlarsan sahip olduğun ama kurulu olmayan Epic oyunları da listelenir. Bağlanmak isteğe bağlıdır.
 
-- **Giriş:** Hangar, Epic'in kendi giriş sayfasını ayrı bir pencerede açar; şifreni Hangar görmez. Yalnızca Epic e-postası ve şifresiyle giriş desteklenir. Google, Apple, Xbox, PlayStation gibi üçüncü taraf girişleri Hangar penceresinde çalışmaz.
+- **Giriş:** Hangar, Epic'in kendi giriş sayfasını ayrı bir pencerede açar; şifreni Hangar görmez. Epic e-postasıyla ya da Epic'in sunduğu Apple, Xbox/Microsoft, PlayStation, Steam, Nintendo, Facebook ve Google girişleriyle bağlanabilirsin. Google bazen gömülü pencerelerde girişi reddeder; öyle olursa Epic e-postanla gir.
 - **Ne saklanıyor:** yalnızca yenileme belgesi, geçerlilik süresi, Epic hesap kimliği ve görünen ad, `%APPDATA%\com.hangar.app\accounts\epic.dat` dosyasında. Windows DPAPI ile şifreli; yalnızca bu Windows kullanıcısı çözebilir. Belgenin ömrü yaklaşık bir yıldır ve her kullanımda yenilenir.
 - **Kaydedilemezse:** bağlanırken belge diske yazılamazsa "Bağlantı kaydedilemedi" hatası görünür. Sonradan yenilenen belge yazılamazsa Hangar onu yeniden başlatmaya kadar bellekte tutar; yeniden başlatınca tekrar bağlanman gerekebilir.
 - **Nasıl silinir:** "Bağlantıyı kes" dosyayı siler, Epic'teki oturumu kapatır ve Hangar'ın Epic oyun listesi ile başlık önbelleklerini temizler. Dosya elle de silinebilir.

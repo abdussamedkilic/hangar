@@ -3,7 +3,8 @@ import { listen } from "@tauri-apps/api/event";
 import { api, type Game } from "../lib/api";
 import { view, type Filter, type Sort } from "../lib/library";
 
-export function useLibrary() {
+/** `onUpdated` runs on every `library-updated` payload (whose games already carry fresh preferences). */
+export function useLibrary(onUpdated?: () => void) {
   const [games, setGames] = useState<Game[]>([]);
   const [selectedId, select] = useState<number | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
@@ -15,6 +16,8 @@ export function useLibrary() {
   const mounted = useRef(true);
   const current = useRef({ filter, query, sort, selectedId });
   current.current = { filter, query, sort, selectedId };
+  const updated = useRef(onUpdated);
+  updated.current = onUpdated;
 
   const rescan = useCallback(async () => {
     setRescanning(true);
@@ -50,11 +53,14 @@ export function useLibrary() {
     (async () => {
       const [u1, u2] = await Promise.all([
         listen<Game[]>("library-updated", (e) =>
-          alive &&
-          setGames((prev) => {
-            const known = new Map(prev.map((g) => [g.id, g.cover_path]));
-            return e.payload.map((g) => (g.cover_path == null && known.get(g.id) ? { ...g, cover_path: known.get(g.id)! } : g));
-          }),
+          {
+            if (!alive) return;
+            updated.current?.();
+            setGames((prev) => {
+              const known = new Map(prev.map((g) => [g.id, g.cover_path]));
+              return e.payload.map((g) => (g.cover_path == null && known.get(g.id) ? { ...g, cover_path: known.get(g.id)! } : g));
+            });
+          },
         ),
         listen<{ id: number; path: string }>("cover-ready", (e) =>
           alive && setGames((gs) => gs.map((g) => (g.id === e.payload.id ? { ...g, cover_path: e.payload.path } : g))),

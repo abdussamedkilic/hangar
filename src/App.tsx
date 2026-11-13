@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { api, type Game, type Platform, type Settings } from "./lib/api";
+import { api, type EntryKey, type Game, type Settings } from "./lib/api";
 import { counts, view } from "./lib/library";
 import { useLibrary } from "./state/useLibrary";
 import Sidebar from "./components/Sidebar";
@@ -13,9 +13,9 @@ import AddGameDialog from "./components/AddGameDialog";
 import ContextMenu from "./components/ContextMenu";
 
 export default function App() {
-  const lib = useLibrary();
+  const [prefs, setPrefs] = useState<Record<number, EntryKey>>({});
+  const lib = useLibrary(useCallback(() => setPrefs({}), []));
   const { games, selectedId, select, filter, setFilter, query, setQuery, sort, setSort, warnings, rescanning, loaded, rescan, rescanLabeled, scanLabel, applyReport } = lib;
-  const [prefs, setPrefs] = useState<Record<number, Platform>>({});
   const [error, setError] = useState<string | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [showSettings, setShowSettings] = useState(false);
@@ -41,19 +41,19 @@ export default function App() {
     if (selected && selected.id !== selectedId) select(selected.id);
   }, [selected, selectedId, select]);
 
-  const game = selected && prefs[selected.id] ? { ...selected, preferred: prefs[selected.id] } : selected;
+  const game = selected && prefs[selected.id] ? { ...selected, preferred: prefs[selected.id], default_entry: prefs[selected.id] } : selected;
   const notice = [...(error ? [error] : []), ...warnings].join(" · ");
 
-  const launch = (p: Platform) => {
+  const launch = ([p, id]: EntryKey) => {
     if (!game) return;
     setError(null);
-    api.launch(game.id, p).catch((e) => setError(String(e)));
+    api.launch(game.id, p, id).catch((e) => setError(String(e)));
   };
-  const choose = async (p: Platform) => {
+  const choose = async (key: EntryKey) => {
     if (!game) return;
     try {
-      await api.setPreferred(game.id, p);
-      setPrefs((s) => ({ ...s, [game.id]: p }));
+      await api.setPreferred(game.id, key[0], key[1]);
+      setPrefs((s) => ({ ...s, [game.id]: key }));
     } catch (e) {
       setError(String(e));
     }
@@ -93,7 +93,7 @@ export default function App() {
   const pickCover = async (g: Game) => {
     setError(null);
     try {
-      const f = await open({ filters: [{ name: "Görsel", extensions: ["png", "jpg", "jpeg"] }] });
+      const f = await open({ filters: [{ name: "Görsel", extensions: ["png", "jpg", "jpeg", "webp"] }] });
       if (typeof f === "string") await api.setCover(g.id, f);
     } catch (e) {
       setError(String(e));
