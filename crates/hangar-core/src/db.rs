@@ -1,3 +1,4 @@
+use crate::accounts::epic::CatalogInfo;
 use crate::merge::Override;
 use crate::model::{Game, Platform, PlatformEntry};
 use rusqlite::{params, Connection, OptionalExtension, Result};
@@ -63,7 +64,15 @@ impl Db {
                 exe_path TEXT NOT NULL,
                 args TEXT NOT NULL DEFAULT '[]',
                 source TEXT NOT NULL,
-                added_at INTEGER NOT NULL);",
+                added_at INTEGER NOT NULL);
+             CREATE TABLE IF NOT EXISTS epic_catalog(
+                item_id TEXT PRIMARY KEY,
+                title TEXT NOT NULL,
+                is_game INTEGER NOT NULL);
+             CREATE TABLE IF NOT EXISTS owned_cache(
+                platform TEXT PRIMARY KEY,
+                json TEXT NOT NULL,
+                fetched_at INTEGER NOT NULL);",
         )?;
         Ok(Db { conn })
     }
@@ -183,6 +192,93 @@ impl Db {
             params![k, v],
         )?;
         Ok(())
+    }
+
+    pub fn catalog_get(&self, ids: &[String]) -> Result<HashMap<String, CatalogInfo>> {
+        let mut st = self
+            .conn
+            .prepare("SELECT title, is_game FROM epic_catalog WHERE item_id = ?1")?;
+        let mut out = HashMap::new();
+        for id in ids {
+            let row = st
+                .query_row([id], |r| {
+                    Ok(CatalogInfo {
+                        title: r.get(0)?,
+                        is_game: r.get(1)?,
+                    })
+                })
+                .optional()?;
+            if let Some(info) = row {
+                out.insert(id.clone(), info);
+            }
+        }
+        Ok(out)
+    }
+
+    pub fn catalog_put(&self, items: &HashMap<String, CatalogInfo>) -> Result<()> {
+        let tx = self.conn.unchecked_transaction()?;
+        for (id, info) in items {
+            tx.execute(
+                "INSERT OR REPLACE INTO epic_catalog(item_id, title, is_game) VALUES(?1, ?2, ?3)",
+                params![id, info.title, info.is_game],
+            )?;
+        }
+        tx.commit()
+    }
+
+    pub fn catalog_clear(&self) -> Result<()> {
+        self.conn.execute("DELETE FROM epic_catalog", [])?;
+        Ok(())
+    }
+
+    pub fn owned_cache_get(&self, p: Platform) -> Result<Option<Vec<PlatformEntry>>> {
+        let json: Option<String> = self
+            .conn
+            .query_row(
+                "SELECT json FROM owned_cache WHERE platform = ?1",
+                [p.as_str()],
+                |r| r.get(0),
+            )
+            .optional()?;
+        json.map(|j| {
+            serde_json::from_str(&j).map_err(|err| {
+                rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(err))
+            })
+        })
+        .transpose()
+    }
+
+    pub fn owned_cache_put(&self, p: Platform, v: &[PlatformEntry], at: i64) -> Result<()> {
+        let json = serde_json::to_string(v)
+            .map_err(|err| rusqlite::Error::ToSqlConversionFailure(Box::new(err)))?;
+        self.conn.execute(
+            "INSERT OR REPLACE INTO owned_cache(platform, json, fetched_at) VALUES(?1, ?2, ?3)",
+            params![p.as_str(), json, at],
+        )?;
+        Ok(())
+    }
+
+    pub fn owned_cache_delete(&self, p: Platform) -> Result<()> {
+        self.conn
+            .execute("DELETE FROM owned_cache WHERE platform = ?1", [p.as_str()])?;
+        Ok(())
+    }
+
+    pub fn account_expired(&self, p: Platform) -> Result<bool> {
+        Ok(self
+            .get_setting(&format!("account_state.{}", p.as_str()))?
+            .as_deref()
+            == Some("expired"))
+    }
+
+    pub fn set_account_expired(&self, p: Platform, on: bool) -> Result<()> {
+        let key = format!("account_state.{}", p.as_str());
+        if on {
+            self.set_setting(&key, "expired")
+        } else {
+            self.conn.execute("DELETE FROM settings WHERE key = ?1", [key])?;
+            Ok(())
+        }
     }
 
     pub fn add_local_game(&self, title: &str, exe: &str, source: &str) -> Result<i64> {
@@ -319,6 +415,57 @@ mod tests {
         assert_eq!((list[0].title.as_str(), list[0].exe_path.as_str()), ("Hades II", r"D:\Hades2.exe"));
         db.remove_local_game(id).unwrap();
         assert!(db.local_games().unwrap().is_empty());
+    }
+
+    #[test]
+    fn catalog_roundtrip() {
+        let db = Db::open_in_memory().unwrap();
+        let mut m = HashMap::new();
+        m.insert("a".to_string(), CatalogInfo { title: "Alpha".into(), is_game: true });
+        m.insert("b".to_string(), CatalogInfo { title: "Beta DLC".into(), is_game: false });
+        db.catalog_put(&m).unwrap();
+        let ids = vec!["a".to_string(), "b".to_string(), "c".to_string()];
+        let got = db.catalog_get(&ids).unwrap();
+        assert_eq!(got.len(), 2);
+        assert_eq!(got["a"], m["a"]);
+        assert_eq!(got["b"], m["b"]);
+        assert!(db.catalog_get(&[]).unwrap().is_empty());
+        db.catalog_clear().unwrap();
+        assert!(db.catalog_get(&ids).unwrap().is_empty());
+    }
+
+    #[test]
+    fn owned_cache_roundtrip() {
+        let db = Db::open_in_memory().unwrap();
+        assert!(db.owned_cache_get(Platform::Epic).unwrap().is_none());
+        let v = vec![PlatformEntry {
+            platform: Platform::Epic,
+            platform_id: "ns:item".into(),
+            title: "Alpha".into(),
+            installed: false,
+            install_path: None,
+            size_bytes: None,
+            last_played: None,
+            playtime_min: None,
+            launch_uri: "x".into(),
+            install_uri: None,
+            launch_args: vec![],
+        }];
+        db.owned_cache_put(Platform::Epic, &v, 100).unwrap();
+        assert_eq!(db.owned_cache_get(Platform::Epic).unwrap(), Some(v));
+        db.owned_cache_delete(Platform::Epic).unwrap();
+        assert!(db.owned_cache_get(Platform::Epic).unwrap().is_none());
+    }
+
+    #[test]
+    fn account_expired_flag() {
+        let db = Db::open_in_memory().unwrap();
+        assert!(!db.account_expired(Platform::Epic).unwrap());
+        db.set_account_expired(Platform::Epic, true).unwrap();
+        assert!(db.account_expired(Platform::Epic).unwrap());
+        db.set_account_expired(Platform::Epic, false).unwrap();
+        assert!(!db.account_expired(Platform::Epic).unwrap());
+        assert_eq!(db.get_setting("account_state.epic").unwrap(), None);
     }
 
     #[test]

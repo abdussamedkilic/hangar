@@ -14,7 +14,7 @@ import ContextMenu from "./components/ContextMenu";
 
 export default function App() {
   const lib = useLibrary();
-  const { games, selectedId, select, filter, setFilter, query, setQuery, sort, setSort, warnings, rescanning, loaded, rescan, applyReport } = lib;
+  const { games, selectedId, select, filter, setFilter, query, setQuery, sort, setSort, warnings, rescanning, loaded, rescan, rescanLabeled, scanLabel, applyReport } = lib;
   const [prefs, setPrefs] = useState<Record<number, Platform>>({});
   const [error, setError] = useState<string | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -111,7 +111,7 @@ export default function App() {
     <div className="app">
       <Sidebar filter={filter} counts={counts(games)} onFilter={setFilter} onSettings={openSettings} onRescan={rescan} onAdd={() => setLocalDlg("new")} rescanning={rescanning} />
       <main>
-        {rescanning && <span className="scan" role="status">Taranıyor…</span>}
+        {rescanning && <span className="scan" role="status">{scanLabel ?? "Taranıyor…"}</span>}
         <Stage game={game} onLaunch={launch} onChoose={choose} onSplit={split} onEdit={editLocal} onRemove={removeLocal} />
         {notice && <p className="notice">{notice}</p>}
         <SearchBar query={query} onQuery={setQuery} sort={sort} onSort={setSort} />
@@ -131,7 +131,7 @@ export default function App() {
           />
         )}
       </main>
-      {showSettings && settings !== null && <SettingsDialog settings={settings} onScanned={applyReport} onSaved={async () => { loadSettings(); await rescan(); }} onClose={closeSettings} />}
+      {showSettings && settings !== null && <SettingsDialog settings={settings} onScanned={applyReport} onAccountsChanged={(l) => (l ? rescanLabeled(l) : rescan())} onSaved={async () => { loadSettings(); await rescan(); }} onClose={closeSettings} />}
       {localDlg && <AddGameDialog edit={localDlg === "new" ? undefined : localDlg} onDone={applyReport} onClose={closeLocal} />}
       {ctx && <ContextMenu x={ctx.x} y={ctx.y} onClose={closeCtx} items={[{ label: "Şununla birleştir…", onSelect: () => setMergeFor(ctx.game) }, { label: "Kapak seç…", onSelect: () => void pickCover(ctx.game) }]} />}
       {mergeFor && <MergePicker source={mergeFor} games={games} onPick={(g) => merge(mergeFor, g)} onClose={closeMerge} />}

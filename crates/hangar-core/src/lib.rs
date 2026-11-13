@@ -1,3 +1,4 @@
+pub mod accounts;
 pub mod artwork;
 pub mod db;
 pub mod library;

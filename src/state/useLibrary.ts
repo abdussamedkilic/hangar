@@ -28,6 +28,19 @@ export function useLibrary() {
     }
   }, []);
 
+  const [scanLabel, setScanLabel] = useState<string | null>(null);
+  const rescanLabeled = useCallback(
+    async (label: string) => {
+      setScanLabel(label);
+      try {
+        await rescan();
+      } finally {
+        if (mounted.current) setScanLabel(null);
+      }
+    },
+    [rescan],
+  );
+
   const applyReport = useCallback((r: { warnings: string[] }) => setWarnings(r.warnings), []);
 
   useEffect(() => {
@@ -68,5 +81,5 @@ export function useLibrary() {
     };
   }, [rescan]);
 
-  return { games, selectedId, select, filter, setFilter, query, setQuery, sort, setSort, warnings, rescanning, loaded, rescan, applyReport };
+  return { games, selectedId, select, filter, setFilter, query, setQuery, sort, setSort, warnings, rescanning, loaded, rescan, rescanLabeled, scanLabel, applyReport };
 }

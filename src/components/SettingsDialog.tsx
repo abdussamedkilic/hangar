@@ -3,15 +3,17 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { api, type ScanReport, type Settings } from "../lib/api";
 import Modal from "./Modal";
 import ScanDialog from "./ScanDialog";
+import AccountsSection from "./AccountsSection";
 
 interface Props {
   settings: Settings;
   onSaved: () => Promise<void>;
   onScanned?: (r: ScanReport) => void;
+  onAccountsChanged?: (label?: string) => Promise<void>;
   onClose: () => void;
 }
 
-export default function SettingsDialog({ settings, onSaved, onScanned, onClose }: Props) {
+export default function SettingsDialog({ settings, onSaved, onScanned, onAccountsChanged, onClose }: Props) {
   const [key, setKey] = useState(settings.steam_api_key ?? "");
   const [steamId, setSteamId] = useState(settings.steam_id ?? "");
   const [show, setShow] = useState(false);
@@ -95,6 +97,7 @@ export default function SettingsDialog({ settings, onSaved, onScanned, onClose }
             <button type="button" className="ghost" disabled={folders.length === 0} onClick={() => setScanning(true)}>Klasörleri tara</button>
           </div>
         </div>
+        <AccountsSection onChanged={onAccountsChanged ?? (async () => {})} />
         {error && <p className="err" role="alert">{error}</p>}
         <div className="acts">
           <button type="button" className="ghost" onClick={onClose}>Vazgeç</button>

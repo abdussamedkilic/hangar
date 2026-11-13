@@ -22,11 +22,26 @@ Testler: `cargo test -p hangar-core` ve `npm test`.
 
 ## Veri konumu
 
-Veritabanı ve kapak görselleri `%APPDATA%\com.hangar.app\` altında tutulur.
+Veritabanı ve kapak görselleri `%APPDATA%\com.hangar.app\` altında tutulur. Bağlı hesap belgesi `accounts\` klasöründedir.
 
 ## Steam API anahtarı (isteğe bağlı)
 
 Anahtar girilmezse yalnızca kurulu Steam oyunları listelenir. Sahip olunan tüm oyunları görmek için https://steamcommunity.com/dev/apikey adresinden bir anahtar alıp uygulamanın ayarlarına girin.
+
+## Hesap bağlantıları (Epic)
+
+Epic hesabını bağlarsan sahip olduğun ama kurulu olmayan Epic oyunları da listelenir. Bağlanmak isteğe bağlıdır.
+
+- **Giriş:** Hangar, Epic'in kendi giriş sayfasını ayrı bir pencerede açar; şifreni Hangar görmez. Yalnızca Epic e-postası ve şifresiyle giriş desteklenir. Google, Apple, Xbox, PlayStation gibi üçüncü taraf girişleri Hangar penceresinde çalışmaz.
+- **Ne saklanıyor:** yalnızca yenileme belgesi, geçerlilik süresi, Epic hesap kimliği ve görünen ad, `%APPDATA%\com.hangar.app\accounts\epic.dat` dosyasında. Windows DPAPI ile şifreli; yalnızca bu Windows kullanıcısı çözebilir. Belgenin ömrü yaklaşık bir yıldır ve her kullanımda yenilenir.
+- **Kaydedilemezse:** bağlanırken belge diske yazılamazsa "Bağlantı kaydedilemedi" hatası görünür. Sonradan yenilenen belge yazılamazsa Hangar onu yeniden başlatmaya kadar bellekte tutar; yeniden başlatınca tekrar bağlanman gerekebilir.
+- **Nasıl silinir:** "Bağlantıyı kes" dosyayı siler, Epic'teki oturumu kapatır ve Hangar'ın Epic oyun listesi ile başlık önbelleklerini temizler. Dosya elle de silinebilir.
+- **Epic'te görünüşü:** Hangar, Epic Games Launcher'ın herkese açık istemci kimliğini kullanır. Bu yüzden Epic hesap sayfasında bağlantı "Epic Games Launcher" olarak görünür.
+- **Resmi olmayan servis:** Epic bu yolu engelleyebilir; o zaman yalnızca kurulu Epic oyunları görünür.
+- **Kullanım koşulları:** bu yol Epic'in kullanım koşullarına aykırı sayılabilir. En kötü durumda hesap işaretlenebilir. Legendary, Heroic ve Playnite aynı yolu kullanıyor, ama bu bir garanti değil.
+- **Belgenin kapsamı:** belge hesabın tamamına erişir. DPAPI, aynı kullanıcıyla çalışan zararlı yazılıma karşı koruma sağlamaz.
+- **Sunucu yok:** Hangar'ın sunucusu yok; veri yalnızca Epic'e gider.
+- **Kalıcı belge istemiyorsan:** işin bitince bağlantıyı kes.
 
 ## Mimari
 

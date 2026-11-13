@@ -1416,11 +1416,15 @@ dependencies = [
 name = "hangar-core"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "rusqlite",
  "serde",
  "serde_json",
  "ureq",
+ "url",
+ "windows-sys 0.61.2",
  "winreg 0.52.0",
+ "zeroize",
 ]
 
 [[package]]

@@ -1,0 +1,1 @@
+{"responseMetadata":{"nextCursor":"CUR1"},"records":[{"namespace":"ns1","catalogItemId":"game1","appName":"Fig","sandboxType":"PUBLIC"},{"namespace":"ue","catalogItemId":"ue1","appName":"UeAsset"},{"namespace":"ns2","catalogItemId":"dlc1","appName":"FigDlc"}]}

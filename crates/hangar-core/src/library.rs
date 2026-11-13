@@ -9,10 +9,12 @@ pub struct ScanReport {
     pub warnings: Vec<String>,
 }
 
+pub type OwnedLists = Vec<(Platform, Result<Vec<PlatformEntry>, ProviderError>)>;
+
 pub fn scan_all(
     db: &Db,
     providers: &[Box<dyn LibraryProvider>],
-    owned: Option<Result<Vec<PlatformEntry>, ProviderError>>,
+    owned: OwnedLists,
 ) -> rusqlite::Result<ScanReport> {
     let mut warnings = Vec::new();
     let mut entries: Vec<PlatformEntry> = Vec::new();
@@ -22,24 +24,32 @@ pub fn scan_all(
             Err(e) => warnings.push(format!("{:?} taranamadı: {e}", p.platform())),
         }
     }
-    match owned {
-        None => {}
-        Some(Ok(list)) => {
-            for o in list {
-                let installed = entries
-                    .iter_mut()
-                    .find(|e| e.platform == Platform::Steam && e.platform_id == o.platform_id);
-                match installed {
-                    Some(e) => {
-                        e.playtime_min = o.playtime_min;
-                        e.last_played = e.last_played.or(o.last_played);
+    for (platform, result) in owned {
+        match result {
+            Ok(list) => {
+                for o in list {
+                    let installed = entries
+                        .iter_mut()
+                        .find(|e| e.platform == platform && e.platform_id == o.platform_id);
+                    match installed {
+                        Some(e) => {
+                            if o.playtime_min.is_some() {
+                                e.playtime_min = o.playtime_min;
+                            }
+                            e.last_played = e.last_played.or(o.last_played);
+                            if o.install_uri.is_some() {
+                                e.install_uri = o.install_uri;
+                            }
+                        }
+                        None => entries.push(o),
                     }
-                    None => entries.push(o),
                 }
             }
+            Err(_) if platform == Platform::Steam => warnings.push(
+                "Steam sahip olunan oyunlar alınamadı: API anahtarını kontrol et.".to_string(),
+            ),
+            Err(_) => warnings.push(format!("{:?} sahip olunan oyunlar alınamadı.", platform)),
         }
-        Some(Err(_)) => warnings
-            .push("Steam sahip olunan oyunlar alınamadı: API anahtarını kontrol et.".to_string()),
     }
     let groups = group(entries, &db.overrides()?);
     let games = groups.len();
@@ -164,10 +174,10 @@ mod tests {
                 vec![entry(Platform::Epic, "e", "Hades", true)],
             ),
         ];
-        scan_all(&db, &provs, None).unwrap();
+        scan_all(&db, &provs, vec![]).unwrap();
         let id = db.games().unwrap()[0].id;
         db.set_preferred(id, Platform::Epic).unwrap();
-        scan_all(&db, &provs, None).unwrap();
+        scan_all(&db, &provs, vec![]).unwrap();
         let g = &db.games().unwrap()[0];
         assert_eq!(g.id, id);
         assert_eq!(g.preferred, Some(Platform::Epic));
@@ -178,9 +188,9 @@ mod tests {
         let db = Db::open_in_memory().unwrap();
         let a = entry(Platform::Steam, "1", "Alpha", true);
         let b = entry(Platform::Steam, "2", "Beta", true);
-        scan_all(&db, &[fake(Platform::Steam, vec![a.clone(), b])], None).unwrap();
+        scan_all(&db, &[fake(Platform::Steam, vec![a.clone(), b])], vec![]).unwrap();
         assert_eq!(db.games().unwrap().len(), 2);
-        scan_all(&db, &[fake(Platform::Steam, vec![a])], None).unwrap();
+        scan_all(&db, &[fake(Platform::Steam, vec![a])], vec![]).unwrap();
         let games = db.games().unwrap();
         assert_eq!(games.len(), 1);
         assert_eq!(games[0].title, "Alpha");
@@ -196,7 +206,7 @@ mod tests {
         let r = scan_all(
             &db,
             &[fake(Platform::Steam, vec![installed])],
-            Some(Ok(vec![owned])),
+            vec![(Platform::Steam, Ok(vec![owned]))],
         )
         .unwrap();
         assert_eq!(r.games, 1);
@@ -213,12 +223,48 @@ mod tests {
             Platform::Steam,
             vec![entry(Platform::Steam, "1", "Hades", true)],
         )];
-        let r = scan_all(&db, &provs, Some(Err(ProviderError::Network("x".into())))).unwrap();
+        let r = scan_all(&db, &provs, vec![(Platform::Steam, Err(ProviderError::Network("x".into())))]).unwrap();
         assert_eq!(
             r.warnings,
             vec!["Steam sahip olunan oyunlar alınamadı: API anahtarını kontrol et.".to_string()]
         );
         assert_eq!(db.games().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn owned_epic_keeps_manifest_title() {
+        let db = Db::open_in_memory().unwrap();
+        let installed = entry(Platform::Epic, "Fig", "Death's Door", true);
+        let mut owned = entry(Platform::Epic, "Fig", "Deaths Door", false);
+        owned.install_uri = Some("com.epicgames.launcher://apps/ns%3Aid%3AFig?action=install".into());
+        let other = entry(Platform::Epic, "Owl", "Owlboy", false);
+        let r = scan_all(&db, &[fake(Platform::Epic, vec![installed])],
+            vec![(Platform::Epic, Ok(vec![owned, other]))]).unwrap();
+        assert_eq!(r.games, 2);
+        let games = db.games().unwrap();
+        let g = games.iter().find(|g| g.title == "Death's Door").unwrap();
+        assert_eq!(g.entries.len(), 1);
+        assert!(g.entries[0].installed);
+        assert_eq!(g.entries[0].install_uri.as_deref(), Some("com.epicgames.launcher://apps/ns%3Aid%3AFig?action=install"));
+        assert!(games.iter().any(|g| g.title == "Owlboy" && !g.entries[0].installed));
+    }
+
+    #[test]
+    fn owned_ids_do_not_cross_platforms() {
+        let db = Db::open_in_memory().unwrap();
+        scan_all(&db, &[fake(Platform::Steam, vec![entry(Platform::Steam, "1", "Hades", true)])],
+            vec![(Platform::Epic, Ok(vec![entry(Platform::Epic, "1", "Hades", false)]))]).unwrap();
+        let g = &db.games().unwrap()[0];
+        assert_eq!(g.entries.len(), 2);
+        assert!(g.entries.iter().any(|e| e.platform == Platform::Steam && e.installed));
+        assert!(g.entries.iter().any(|e| e.platform == Platform::Epic && !e.installed));
+    }
+
+    #[test]
+    fn non_steam_owned_error_warning() {
+        let db = Db::open_in_memory().unwrap();
+        let r = scan_all(&db, &[], vec![(Platform::Epic, Err(ProviderError::Network("x".into())))]).unwrap();
+        assert_eq!(r.warnings, vec!["Epic sahip olunan oyunlar alınamadı.".to_string()]);
     }
 
     #[test]
@@ -231,7 +277,7 @@ mod tests {
                 vec![entry(Platform::Steam, "1", "Hades", true)],
             ),
         ];
-        let r = scan_all(&db, &provs, None).unwrap();
+        let r = scan_all(&db, &provs, vec![]).unwrap();
         assert_eq!(r.warnings.len(), 1);
         assert!(r.warnings[0].contains("taranamadı"));
         assert_eq!(db.games().unwrap().len(), 1);
@@ -294,9 +340,9 @@ mod tests {
                 vec![entry(Platform::Epic, "e", "Hades", true)],
             ),
         ];
-        assert_eq!(scan_all(&db, &provs, None).unwrap().games, 2);
+        assert_eq!(scan_all(&db, &provs, vec![]).unwrap().games, 2);
         assert_eq!(db.games().unwrap().len(), 2);
-        scan_all(&db, &provs, None).unwrap();
+        scan_all(&db, &provs, vec![]).unwrap();
         assert_eq!(db.games().unwrap().len(), 2);
     }
 
@@ -312,8 +358,8 @@ mod tests {
             args: vec![],
             source: "manual".into(),
         }]))];
-        assert_eq!(scan_all(&db, &provs, None).unwrap().games, 1);
-        assert_eq!(scan_all(&db, &provs, None).unwrap().games, 1);
+        assert_eq!(scan_all(&db, &provs, vec![]).unwrap().games, 1);
+        assert_eq!(scan_all(&db, &provs, vec![]).unwrap().games, 1);
         let games = db.games().unwrap();
         assert_eq!(games.len(), 1);
         assert_eq!(games[0].entries.len(), 1);
@@ -332,12 +378,12 @@ mod tests {
             fake(Platform::Epic, vec![entry(Platform::Epic, "e", "Hades", true)]),
         ];
         db.add_override(ov(false)).unwrap();
-        scan_all(&db, &provs, None).unwrap();
+        scan_all(&db, &provs, vec![]).unwrap();
         assert_eq!(db.games().unwrap().len(), 2);
         let mut rev = ov(true);
         std::mem::swap(&mut rev.a, &mut rev.b);
         db.add_override(rev).unwrap();
-        scan_all(&db, &provs, None).unwrap();
+        scan_all(&db, &provs, vec![]).unwrap();
         assert_eq!(db.games().unwrap().len(), 1);
     }
 }

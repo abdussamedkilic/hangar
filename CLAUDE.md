@@ -2,7 +2,7 @@
 
 Steam, Epic ve Ubisoft oyunlarını tek kütüphanede birleştiren Windows masaüstü uygulaması. Kullanıcı: kullanıcı (Türkçe konuşur, Windows 11 Türkçe sistem, kullanıcı klasörü `C:\Users\user`, repo `C:\Users\user\workdir\hangar`).
 
-## Durum (2026-11-09, ilk gerçek çalıştırma sonrası)
+## Durum (2026-11-11)
 - v1 `main`'de (PR #1 squash ile merge edildi, 2026-11-11; GitHub: <owner>/hangar). Yeni işler `main`'den yeni dalda.
 - `npm run tauri dev` Windows'ta açıldı: Steam (DAVE THE DIVER, Watch_Dogs), Epic (Death's Door), Ubisoft (Watch_Dogs → Steam ile birleşti) doğru geldi, kapaklar indi.
 - Düzeltildi: Ayarlar'a SteamID yerine kullanıcı adı (`player`) girilince GetOwnedGames sessizce başarısızdı → `steam::is_steamid64`; 17 haneli değilse `loginusers.vdf`'ten alınır.
@@ -20,7 +20,20 @@ Steam, Epic ve Ubisoft oyunlarını tek kütüphanede birleştiren Windows masa�
    - Ek (aynı dal): GOG Galaxy yerel DB'sinden (`C:\ProgramData\GOG.com\Galaxy\storage\galaxy-2.0.db`, salt okuma) kurulu olmayan GOG oyunları (bu PC'de 161); karttan "Kapak seç…"; oyunlar artık Hangar'ın alt süreci olarak başlamıyor (PowerShell `Start-Process`, değerler env ile) — `tauri dev` yeniden başlatması LoL'u öldürüyordu.
    - Riot ikonundan kapak kodu var ama bu PC'deki LoL `.ico` PNG çerçevesi içermiyor → kapak "Kapak seç…" ile elle.
    - Epic'te kurulu olmayan oyunlar yok: güvenilir yerel liste yok, hesap girişi gerekiyor (ayrı tasarım).
-6. Sonra "Bilinen küçük açıklar" listesi.
+   - ✅ (2026-11-11) PR #2 squash ile `main`'e alındı. Kullanıcı GOG'u denedi: kurulu olmayan oyunda "Kur" Galaxy'de kurulumu açıyor.
+6. **Sıradaki (2026-11-11, kullanıcı istedi):** (a) Epic'te kurulu olmayan oyunlar (yerel güvenilir liste yok; hesap girişi ya da başka kaynak — önce tasarım), (b) Ubisoft Connect'te sahip olunan oyunların tamamı (şu an yalnızca kurulu olanlar, kayıt defterinden). Önce brainstorming + karar, sonra plan.
+   - **Karar (kullanıcı, 2026-11-12): Galaxy YOK. Playnite yolu — uygulama içi bağlantı, veriler yalnızca kullanıcının bilgisayarında kalır.** (Council Galaxy'yi önermişti; kullanıcı reddetti.)
+     - Epic: Hangar ayrı pencerede Epic'in kendi giriş sayfasını açar (Hangar şifreyi görmez), yetki kodu → OAuth (Legendary/Heroic/Playnite akışı, launcher'ın açık client id'si), sahip olunan oyunlar Epic kütüphane + katalog servisinden. Yenileme belgesi yalnızca yerelde, Windows DPAPI ile şifreli; "Bağlantıyı kes" siler; asla loglanmaz; sunucu/telemetri yok.
+     - Ubisoft: önce kısa, zaman sınırlı deneme (şifreli yerel önbellek vs Ubisoft'un kendi giriş sayfası + ticket); çalışan yol bulunamazsa yalnızca kurulu oyunlar kalır.
+     - Ayarlar'da "Hesaplar" bölümü; README'de güvenlik notu (belge nerede, nasıl silinir, resmi olmayan servis riski).
+     - Sıradaki oturum: brainstorming → kısa tasarım belgesi → plan → subagent-driven (Sonnet). Riskler council'dan: Epic client id'yi engelleyebilir, belge hesabın tamamına erişir, aynı kullanıcıdaki zararlı yazılıma karşı DPAPI korumaz.
+   - ✅ (2026-11-13) **Epic yapıldı** — `feat/epic-account` dalı (spec `docs/superpowers/specs/2026-11-12-hangar-accounts-design.md`, plan `docs/superpowers/plans/2026-11-12-hangar-epic-account.md`). Tasarım ve plan konseyden geçti; tüm görevler incelendi; son tüm-dal incelemesi temiz. Kullanıcının elle kontrolü bekliyor, sonra `main`'e PR.
+     - E0 (canlı giriş, 2026-11-12): e-posta ile giriş çalışıyor, yalnızca www.epicgames.com ziyaret ediliyor; 240 kayıt (225 oyun, 15 DLC). Gotcha: katalog bulk ucu virgülle birleştirilmiş kimlikte `{}` döner — her kimlik ayrı `id=` parametresi. Yenileme belgesi her kullanımda döner, ~1 yıl geçerli.
+     - İzin listesi yalnızca epicgames.com + captcha alanları: Google/Apple vb. ile giriş bilerek desteklenmiyor.
+     - Debug'da `await hangarProbe()` (DevTools) temizlenmiş canlı yanıtları `%APPDATA%\com.hangar.app\e0\` altına yazar; depoya girmez. Yerel canlı test: `HANGAR_EPIC_LIVE_DIR="$APPDATA/com.hangar.app/e0" cargo test -p hangar-core live_ -- --ignored`.
+   - **Ubisoft sırada:** U0 keşfi (connect.ubisoft.com ticket, `rm_v1` yenileme, sahip olunanlar + kayıt defteriyle eşleşen ürün kimliği), kullanıcının girişiyle; başarılıysa ortak altyapı (giriş penceresi, `SecretStore`, `OwnedLists`, Hesaplar) üzerine kısa ayrı plan.
+   - Not (2026-11-13): PC 30 günde 14 kez BSOD ile yeniden başladı (çoğu 0x1a MEMORY_MANAGEMENT; olası RAM/platform). Bir çökme git ref'ini ve index'i sıfırla doldurdu — onarıldı. Uzun işlerden önce `git fsck` iyi fikir.
+7. Sonra "Bilinen küçük açıklar" listesi.
 
 ## v1.1 fikirleri (kullanıcıdan, 2026-11-11 — henüz tasarlanmadı, önce brainstorming)
 - "Oyna" sonrası geri bildirim/durum (ör. "Ubisoft Connect'e gönderildi", tekrar dene).

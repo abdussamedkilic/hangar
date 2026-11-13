@@ -1,6 +1,8 @@
+use hangar_core::accounts::epic::EpicClient;
+use hangar_core::accounts::login::open_error;
 use hangar_core::artwork::ensure_cover;
 use hangar_core::db::Db;
-use hangar_core::library::{launch_target, resolve, scan_all, LaunchTarget};
+use hangar_core::library::{launch_target, resolve, scan_all, LaunchTarget, OwnedLists};
 use hangar_core::local_scan::{candidates as local_candidates, Candidate};
 use hangar_core::merge::Override;
 use hangar_core::model::{Game, Platform};
@@ -77,6 +79,25 @@ fn scan(app: &AppHandle) -> Result<ScanReport, String> {
             }
         }
     });
+    let mut owned: OwnedLists = owned.into_iter().map(|r| (Platform::Steam, r)).collect();
+    // Epic network calls use their own connection: the shared DB lock is not held.
+    match Db::open(&app.state::<DbPath>().0) {
+        Ok(epic_db) => {
+            let (epic, epic_warn) = app.state::<EpicClient>().owned_for_scan(&epic_db);
+            if let Some(r) = epic {
+                owned.push((Platform::Epic, r));
+            }
+            extra.extend(epic_warn);
+        }
+        // Without its own connection Epic is not refreshed; the last known list comes from the shared one.
+        Err(_) => {
+            let g = db.lock().map_err(|_| "Veritabanı kilitlendi".to_string())?;
+            if let Ok(Some(v)) = g.owned_cache_get(Platform::Epic) {
+                owned.push((Platform::Epic, Ok(v)));
+            }
+            extra.push("Epic oyunları güncellenemedi; son bilinen liste gösteriliyor.".to_string());
+        }
+    }
     let mut providers: Vec<Box<dyn LibraryProvider>> = Vec::new();
     if let Some(p) = steam_p {
         providers.push(Box::new(p));
@@ -217,7 +238,7 @@ pub async fn launch(app: AppHandle, db: Dbs<'_>, game_id: i64, platform: Option<
         LaunchTarget::Uri(u) => app
             .opener()
             .open_url(&u, None::<&str>)
-            .map_err(|e| format!("Açılamadı: {e}"))?,
+            .map_err(|e| open_error(&u, &e.to_string()))?,
         LaunchTarget::Exe { path, args } => {
             tauri::async_runtime::spawn_blocking(move || launch_exe(&path, &args))
                 .await

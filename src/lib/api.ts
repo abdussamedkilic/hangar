@@ -43,6 +43,12 @@ export interface Candidate {
 
 export type EntryKey = [Platform, string];
 
+export interface AccountStatus {
+  platform: Platform;
+  state: "disconnected" | "connected" | "expired";
+  display_name: string | null;
+}
+
 export const api = {
   getLibrary: () => invoke<Game[]>("get_library"),
   rescan: () => invoke<ScanReport>("rescan"),
@@ -59,5 +65,10 @@ export const api = {
   setScanFolders: (folders: string[]) => invoke<void>("set_scan_folders", { folders }),
   scanCandidates: () => invoke<Candidate[]>("scan_candidates"),
   addLocalGames: (items: Candidate[]) => invoke<ScanReport>("add_local_games", { items }),
+  getAccounts: () => invoke<AccountStatus[]>("get_accounts"),
+  connectAccount: (platform: Platform) => invoke<AccountStatus>("connect_account", { platform }),
+  disconnectAccount: (platform: Platform) => invoke<boolean>("disconnect_account", { platform }),
   merge: (a: EntryKey, b: EntryKey) => invoke<ScanReport>("merge_games", { a, b }),
 };
+
+if (import.meta.env.DEV) (window as unknown as { hangarProbe: () => Promise<string> }).hangarProbe = () => invoke<string>("debug_epic_probe");

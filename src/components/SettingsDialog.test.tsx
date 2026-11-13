@@ -4,13 +4,14 @@ import SettingsDialog from "./SettingsDialog";
 import { api } from "../lib/api";
 import { open } from "@tauri-apps/plugin-dialog";
 
-vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn() }));
-vi.mock("../lib/api", () => ({ api: { saveSettings: vi.fn(), getScanFolders: vi.fn(), setScanFolders: vi.fn(), scanCandidates: vi.fn() } }));
+vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn(), ask: vi.fn() }));
+vi.mock("../lib/api", () => ({ api: { saveSettings: vi.fn(), getScanFolders: vi.fn(), setScanFolders: vi.fn(), scanCandidates: vi.fn(), getAccounts: vi.fn() } }));
 
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(api.getScanFolders).mockResolvedValue([]);
   vi.mocked(api.setScanFolders).mockResolvedValue(undefined);
+  vi.mocked(api.getAccounts).mockResolvedValue([]);
 });
 
 test("saves entered values then rescans and closes", async () => {
