@@ -1,7 +1,7 @@
-import type { Game, Platform, PlatformEntry } from "./api";
+import type { Collection, Game, Platform, PlatformEntry } from "./api";
 export type { Game, Platform, PlatformEntry } from "./api";
 
-export type Filter = "all" | "installed" | Platform;
+export type Tab = { kind: "all" } | { kind: "platform"; platform: Platform } | { kind: "collection"; id: number };
 export type Sort = "recent" | "title" | "playtime";
 
 const PLATFORMS: Platform[] = ["steam", "epic", "ubisoft", "gog", "riot", "local"];
@@ -52,14 +52,41 @@ const playtime = (g: Game) => g.entries.reduce((s, e) => s + (e.playtime_min ?? 
 
 const cmp = (x: string, y: string): number => (x < y ? -1 : x > y ? 1 : 0);
 
-export function view(games: Game[], f: Filter, q: string, s: Sort): Game[] {
+export function tabKey(t: Tab): string {
+  return t.kind === "all" ? "all" : t.kind === "platform" ? `p:${t.platform}` : `c:${t.id}`;
+}
+
+export function parseTab(s: string | null, cols: Collection[]): Tab {
+  if (s?.startsWith("p:")) {
+    const p = s.slice(2) as Platform;
+    if (PLATFORMS.includes(p)) return { kind: "platform", platform: p };
+  } else if (s?.startsWith("c:")) {
+    const id = Number(s.slice(2));
+    if (Number.isInteger(id) && cols.some((c) => c.id === id)) return { kind: "collection", id };
+  }
+  return { kind: "all" };
+}
+
+export function inCollection(g: Game, c: Collection): boolean {
+  return g.entries.some((e) => c.entries.some(([p, id]) => p === e.platform && id === e.platform_id));
+}
+
+export function installedIn(g: Game, t: Tab): boolean {
+  return t.kind === "platform" ? g.entries.some((e) => e.platform === t.platform && e.installed) : isInstalled(g);
+}
+
+function inTab(g: Game, t: Tab, cols: Collection[]): boolean {
+  if (t.kind === "all") return true;
+  if (t.kind === "platform") return g.entries.some((e) => e.platform === t.platform);
+  const c = cols.find((c) => c.id === t.id);
+  return c !== undefined && inCollection(g, c);
+}
+
+export function view(games: Game[], t: Tab, installedOnly: boolean, cols: Collection[], q: string, s: Sort): Game[] {
   const nq = normalize(q);
   const out = games
     .map((g) => ({ g, n: normalize(g.title) }))
-    .filter(
-      ({ g, n }) =>
-        (f === "all" || (f === "installed" ? isInstalled(g) : g.entries.some((e) => e.platform === f))) && n.includes(nq),
-    );
+    .filter(({ g, n }) => inTab(g, t, cols) && (!installedOnly || installedIn(g, t)) && n.includes(nq));
   const byTitle = (a: { n: string }, b: { n: string }) => cmp(a.n, b.n);
   out.sort((a, b) => {
     if (s === "title") return byTitle(a, b);
@@ -73,8 +100,15 @@ export function view(games: Game[], f: Filter, q: string, s: Sort): Game[] {
   return out.map(({ g }) => g);
 }
 
-export function counts(games: Game[]): Record<Filter, number> {
-  const c: Record<Filter, number> = { all: games.length, installed: games.filter(isInstalled).length, steam: 0, epic: 0, ubisoft: 0, gog: 0, riot: 0, local: 0 };
-  for (const g of games) for (const p of PLATFORMS) if (g.entries.some((e) => e.platform === p)) c[p]++;
-  return c;
+export function tabCounts(games: Game[], installedOnly: boolean, cols: Collection[]) {
+  const n = (t: Tab) => games.filter((g) => inTab(g, t, cols) && (!installedOnly || installedIn(g, t))).length;
+  const platform = {} as Record<Platform, number>;
+  for (const p of PLATFORMS) platform[p] = n({ kind: "platform", platform: p });
+  const collection: Record<number, number> = {};
+  for (const c of cols) collection[c.id] = n({ kind: "collection", id: c.id });
+  return { all: n({ kind: "all" }), platform, collection };
+}
+
+export function installedCount(games: Game[], t: Tab, cols: Collection[]): number {
+  return games.filter((g) => inTab(g, t, cols) && installedIn(g, t)).length;
 }

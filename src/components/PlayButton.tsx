@@ -5,8 +5,11 @@ import { currentEntry } from "../lib/library";
 export const PLATFORM_NAME: Record<Platform, string> = { steam: "Steam", epic: "Epic", ubisoft: "Ubisoft", gog: "GOG", riot: "Riot", local: "Yerel" };
 
 /** `Oyna|Kur · Mağaza (kopya) [· sürüm]`; the edition only when the card mixes editions. */
+export const missingExe = (e: PlatformEntry) => e.platform === "local" && !e.installed;
+export const verb = (e: PlatformEntry) => (e.installed ? "Oyna" : missingExe(e) ? "Exe bulunamadı" : "Kur");
+
 function labelText(e: PlatformEntry, showEdition: boolean): string {
-  let t = `${e.installed ? "Oyna" : "Kur"} · ${PLATFORM_NAME[e.platform]}`;
+  let t = `${verb(e)} · ${PLATFORM_NAME[e.platform]}`;
   if (e.copy) t += ` (${e.copy})`;
   if (showEdition && e.edition) t += ` · ${e.edition}`;
   return t;
@@ -19,7 +22,7 @@ function Label({ e, showEdition, nth }: { e: PlatformEntry; showEdition: boolean
   if (showEdition && e.edition) rest += ` · ${e.edition}`;
   return (
     <>
-      {e.installed ? "Oyna" : "Kur"} · <span lang="en">{rest}</span>
+      {verb(e)} · <span lang="en">{rest}</span>
       {nth ? ` · ${nth}. kopya` : ""}
     </>
   );
@@ -62,7 +65,7 @@ export default function PlayButton({ game, onLaunch, onChoose }: Props) {
 
   return (
     <div className="play" ref={root}>
-      <button className={`play-main${multi ? "" : " solo"}`} onClick={() => onLaunch(keyOf(current))}>
+      <button className={`play-main${multi ? "" : " solo"}`} disabled={missingExe(current)} onClick={() => onLaunch(keyOf(current))}>
         <span><Label e={current} showEdition={showEdition} nth={nths[game.entries.indexOf(current)]} /></span>
       </button>
       {multi && (

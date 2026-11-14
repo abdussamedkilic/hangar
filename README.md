@@ -28,6 +28,8 @@ Veritabanı ve kapak görselleri `%APPDATA%\com.hangar.app\` altında tutulur. B
 
 Anahtar girilmezse yalnızca kurulu Steam oyunları listelenir. Sahip olunan tüm oyunları görmek için https://steamcommunity.com/dev/apikey adresinden bir anahtar alıp uygulamanın ayarlarına girin.
 
+SteamID alanına kullanıcı adını değil, 17 haneli SteamID64 numarasını yazın; boş bırakabilirsiniz. Boşsa Hangar SteamID'yi Steam'in `loginusers.vdf` dosyasından alır.
+
 ## Hesap bağlantıları (Epic)
 
 Epic hesabını bağlarsan sahip olduğun ama kurulu olmayan Epic oyunları da listelenir. Bağlanmak isteğe bağlıdır.

@@ -95,3 +95,13 @@ test("identical copies are numbered and chosen by their own id", () => {
   fireEvent.click(screen.getByRole("menuitemradio", { name: /2\. kopya/ }));
   expect(onChoose).toHaveBeenCalledWith(["gog", "2"]);
 });
+
+test("local entry without exe says Exe bulunamadı and is disabled", () => {
+  const onLaunch = vi.fn();
+  render(<PlayButton game={game([entry("local", false)])} onLaunch={onLaunch} onChoose={vi.fn()} />);
+  const b = screen.getByRole("button", { name: "Exe bulunamadı · Yerel" });
+  expect(b).toBeDisabled();
+  fireEvent.click(b);
+  expect(onLaunch).not.toHaveBeenCalled();
+  expect(screen.queryByText(/Kur/)).toBeNull();
+});

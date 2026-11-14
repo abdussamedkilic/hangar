@@ -50,7 +50,7 @@ fn latest_mtime(a: Option<std::time::SystemTime>, b: Option<std::time::SystemTim
     a.max(b)
 }
 
-type Dbs<'a> = State<'a, Mutex<Db>>;
+pub(crate) type Dbs<'a> = State<'a, Mutex<Db>>;
 
 #[derive(Serialize)]
 pub struct ScanReport {
@@ -64,11 +64,11 @@ pub struct Settings {
     steam_id: Option<String>,
 }
 
-fn lock<'a>(db: &'a Dbs) -> Result<MutexGuard<'a, Db>, String> {
+pub(crate) fn lock<'a>(db: &'a Dbs) -> Result<MutexGuard<'a, Db>, String> {
     db.lock().map_err(|_| "Veritabanı kilitlendi".to_string())
 }
 
-fn dberr(e: impl std::fmt::Display) -> String {
+pub(crate) fn dberr(e: impl std::fmt::Display) -> String {
     format!("Veritabanı hatası: {e}")
 }
 
@@ -241,16 +241,44 @@ pub async fn rescan(app: AppHandle) -> Result<ScanReport, String> {
 /// `launch_env`, never through the script text. No `-Verb RunAs`: ShellExecute
 /// shows the UAC prompt itself when the exe requires elevation.
 const LAUNCH_SCRIPT: &str = "$ErrorActionPreference = 'Stop'; \
-$a = @($env:HANGAR_ARGS | ConvertFrom-Json | ForEach-Object { '\"' + ($_ -replace '\"','\\\"') + '\"' }); \
+$a = @($env:HANGAR_ARGS | ConvertFrom-Json | ForEach-Object { $_ }); \
 if ($a.Count) { Start-Process -FilePath $env:HANGAR_EXE -WorkingDirectory $env:HANGAR_DIR -ArgumentList $a } \
 else { Start-Process -FilePath $env:HANGAR_EXE -WorkingDirectory $env:HANGAR_DIR }";
+
+/// Quotes one argument per the Windows CommandLineToArgvW rules: backslash runs before a `"`
+/// (and trailing ones) are doubled, `"` becomes `\"`. Plain tokens stay unquoted.
+fn quote_arg(s: &str) -> String {
+    if !s.is_empty() && s.chars().all(|c| c.is_alphanumeric() || "-_.=:/+@,".contains(c)) {
+        return s.to_string();
+    }
+    let mut out = String::from("\"");
+    let mut slashes = 0usize;
+    for c in s.chars() {
+        match c {
+            '\\' => slashes += 1,
+            '"' => {
+                out.push_str(&"\\".repeat(slashes * 2 + 1));
+                out.push('"');
+                slashes = 0;
+            }
+            _ => {
+                out.push_str(&"\\".repeat(slashes));
+                out.push(c);
+                slashes = 0;
+            }
+        }
+    }
+    out.push_str(&"\\".repeat(slashes * 2));
+    out.push('"');
+    out
+}
 
 fn launch_env(path: &std::path::Path, args: &[String]) -> Vec<(&'static str, String)> {
     let dir = path.parent().map(|d| d.to_path_buf()).unwrap_or_default();
     vec![
         ("HANGAR_EXE", path.to_string_lossy().into_owned()),
         ("HANGAR_DIR", dir.to_string_lossy().into_owned()),
-        ("HANGAR_ARGS", serde_json::to_string(args).unwrap_or_else(|_| "[]".into())),
+        ("HANGAR_ARGS", serde_json::to_string(&args.iter().map(|a| quote_arg(a)).collect::<Vec<_>>()).unwrap_or_else(|_| "[]".into())),
     ]
 }
 
@@ -336,7 +364,17 @@ mod launch_tests {
         assert_eq!(get("HANGAR_EXE"), "C:\\Oyunlar\\Şeker Oyun\\g.exe");
         assert_eq!(get("HANGAR_DIR"), "C:\\Oyunlar\\Şeker Oyun");
         let back: Vec<String> = serde_json::from_str(&get("HANGAR_ARGS")).unwrap();
-        assert_eq!(back, args);
+        let quoted: Vec<String> = args.iter().map(|a| quote_arg(a)).collect();
+        assert_eq!(back, quoted);
+    }
+
+    #[test]
+    fn quote_arg_follows_argv_rules() {
+        assert_eq!(quote_arg(r#"a\"b"#), r#""a\\\"b""#);
+        assert_eq!(quote_arg(r"C:\dir\"), r#""C:\dir\\""#);
+        assert_eq!(quote_arg("plain"), "plain");
+        assert_eq!(quote_arg("a b"), "\"a b\"");
+        assert_eq!(quote_arg(""), "\"\"");
     }
 }
 
@@ -436,15 +474,16 @@ pub async fn remove_local_game(app: AppHandle, id: i64) -> Result<ScanReport, St
     rescan_inner(app).await
 }
 
-fn scan_folders_of(db: &Db) -> Vec<String> {
-    setting(db, "scan_folders")
-        .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_default()
+fn scan_folders_of(db: &Db) -> Result<Vec<String>, String> {
+    match setting(db, "scan_folders") {
+        None => Ok(vec![]),
+        Some(s) => serde_json::from_str(&s).map_err(|_| "Tarama klasörleri okunamadı; Ayarlar'dan yeniden seç".to_string()),
+    }
 }
 
 #[tauri::command]
 pub fn get_scan_folders(db: Dbs) -> Result<Vec<String>, String> {
-    Ok(scan_folders_of(&*lock(&db)?))
+    scan_folders_of(&*lock(&db)?)
 }
 
 #[tauri::command]
@@ -467,7 +506,7 @@ pub async fn scan_candidates(app: AppHandle) -> Result<Vec<Candidate>, String> {
                 .map(PathBuf::from)
                 .collect();
             known.extend(g.local_games().map_err(dberr)?.into_iter().map(|l| PathBuf::from(l.exe_path)));
-            let folders: Vec<PathBuf> = scan_folders_of(&g).into_iter().map(PathBuf::from).collect();
+            let folders: Vec<PathBuf> = scan_folders_of(&g)?.into_iter().map(PathBuf::from).collect();
             (folders, known)
         };
         Ok(local_candidates(&folders, &known))
@@ -512,5 +551,45 @@ mod galaxy_tests {
         assert!(changed_since(Some(later), Some(t)));
         assert!(!changed_since(Some(t), Some(later)));
         assert!(!changed_since(Some(t), Some(t)));
+    }
+}
+
+#[cfg(test)]
+mod scan_folder_tests {
+    use super::*;
+
+    #[test]
+    fn corrupt_scan_folders_is_an_error() {
+        let db = Db::open_in_memory().unwrap();
+        assert_eq!(scan_folders_of(&db), Ok(vec![]));
+        db.set_setting("scan_folders", r#"["C:/Oyunlar"]"#).unwrap();
+        assert_eq!(scan_folders_of(&db), Ok(vec!["C:/Oyunlar".to_string()]));
+        db.set_setting("scan_folders", "{bozuk").unwrap();
+        assert_eq!(scan_folders_of(&db), Err("Tarama klasörleri okunamadı; Ayarlar'dan yeniden seç".to_string()));
+    }
+}
+
+#[cfg(all(test, windows))]
+mod launch_script_tests {
+    use super::*;
+
+    /// Runs the real script under Windows PowerShell 5.1 against a missing exe.
+    #[test]
+    #[ignore]
+    fn launch_script_binds_args_in_ps51() {
+        let root = std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into());
+        let ps = std::path::Path::new(&root).join(r"System32\WindowsPowerShell\v1.0\powershell.exe");
+        let missing = std::path::Path::new(r"C:\hangar-no-such-dir\missing.exe");
+        for args in [vec![], vec!["--a=1".to_string(), "\"x y\"".to_string()]] {
+            let mut cmd = std::process::Command::new(&ps);
+            cmd.args(["-NoProfile", "-NonInteractive", "-Command", LAUNCH_SCRIPT]);
+            for (k, v) in launch_env(missing, &args) {
+                cmd.env(k, v);
+            }
+            let out = cmd.output().unwrap();
+            let err = String::from_utf8_lossy(&out.stderr);
+            assert!(!err.contains("Cannot convert"), "args {args:?}: {err}");
+            assert!(!out.status.success(), "missing exe must fail: {err}");
+        }
     }
 }

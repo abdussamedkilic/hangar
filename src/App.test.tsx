@@ -8,7 +8,7 @@ vi.mock("./lib/api", () => ({ api: { getSettings: vi.fn().mockResolvedValue({ st
 
 vi.mock("./state/useLibrary", () => ({
   useLibrary: () => ({
-    games: [], selectedId: null, select: vi.fn(), filter: "all", setFilter: vi.fn(), query: "", setQuery: vi.fn(),
+    games: [], selectedId: null, select: vi.fn(), tab: { kind: "all" }, setTab: vi.fn(), installedOnly: false, setInstalledOnly: vi.fn(), collections: [], reloadCollections: vi.fn(), query: "", setQuery: vi.fn(),
     sort: "recent", setSort: vi.fn(), warnings: [], rescanning: false, loaded: true, rescan,
   }),
 }));

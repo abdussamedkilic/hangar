@@ -7,12 +7,14 @@ pub struct Candidate {
     pub exe_path: String,
 }
 
-const EXCLUDED: [&str; 6] = ["unins", "setup", "redist", "crash", "updater", "install"];
+const EXCLUDED: [&str; 3] = ["setup", "redist", "updater"];
 
 /// True for installers, uninstallers, redistributables, crash handlers and updaters.
 pub fn is_excluded_exe(file_name: &str) -> bool {
     let n = file_name.to_lowercase();
-    EXCLUDED.iter().any(|p| n.contains(p))
+    n.starts_with("unins") || n.starts_with("install")
+        || EXCLUDED.iter().any(|p| n.contains(p))
+        || (n.contains("crash") && ["handler", "report", "pad"].iter().any(|p| n.contains(p)))
 }
 
 fn norm(p: &Path) -> String {
@@ -91,7 +93,7 @@ mod tests {
         for n in ["unins000.exe", "Setup.exe", "vc_redist.x64.exe", "UnityCrashHandler64.exe", "DXSETUP.exe", "GameUpdater.exe", "install.exe"] {
             assert!(is_excluded_exe(n), "{n}");
         }
-        for n in ["Hades.exe", "RiotClientLauncher.exe", "Launcher.exe"] {
+        for n in ["Hades.exe", "RiotClientLauncher.exe", "Launcher.exe", "CrashBandicoot.exe", "MyUninstaller.exe"] {
             assert!(!is_excluded_exe(n), "{n}");
         }
     }

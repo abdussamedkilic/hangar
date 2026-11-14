@@ -217,6 +217,25 @@ mod tests {
     }
 
     #[test]
+    fn pbe_install_is_a_separate_entry() {
+        const PBE_YAML: &str = include_str!("../../tests/fixtures/riot/league_of_legends.pbe.product_settings.yaml");
+        assert_eq!(install_path_from_yaml(PBE_YAML).as_deref(), Some("C:/Riot Games/League of Legends (PBE)"));
+        let root = setup("pbe");
+        let live = root.join("games").join("League of Legends");
+        let pbe = root.join("games").join("League of Legends (PBE)");
+        fs::create_dir_all(&live).unwrap();
+        fs::create_dir_all(&pbe).unwrap();
+        product(&root, "league_of_legends.live", &live);
+        product(&root, "league_of_legends.pbe", &pbe);
+        let got = RiotProvider::with_root(root.clone()).scan_products("C:/Riot Games/Riot Client/RiotClientServices.exe");
+        let ids: Vec<_> = got.iter().map(|e| e.platform_id.as_str()).collect();
+        assert_eq!(ids, ["league_of_legends.live", "league_of_legends.pbe"]);
+        assert_eq!(got[1].title, "League of Legends (PBE)");
+        assert_eq!(got[1].launch_args, vec!["--launch-product=league_of_legends", "--launch-patchline=pbe"]);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
     fn missing_client_json_is_empty() {
         let root = setup("nojson");
         assert_eq!(RiotProvider::with_root(root.clone()).scan().unwrap(), vec![]);

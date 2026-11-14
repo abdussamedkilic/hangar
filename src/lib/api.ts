@@ -45,6 +45,9 @@ export interface Candidate {
 }
 
 export type EntryKey = [Platform, string];
+export interface Collection { id: number; name: string; entries: EntryKey[] }
+export interface ThemeRead { colors: Record<string, string>; warnings: string[] }
+export interface UiPrefs { view: string; tab: string; installed: boolean }
 
 export interface AccountStatus {
   platform: Platform;
@@ -73,6 +76,16 @@ export const api = {
   connectAccount: (platform: Platform) => invoke<AccountStatus>("connect_account", { platform }),
   disconnectAccount: (platform: Platform) => invoke<boolean>("disconnect_account", { platform }),
   merge: (a: EntryKey, b: EntryKey) => invoke<ScanReport>("merge_games", { a, b }),
+  getCollections: () => invoke<Collection[]>("get_collections"),
+  createCollection: (name: string) => invoke<number>("create_collection", { name }),
+  renameCollection: (id: number, name: string) => invoke<void>("rename_collection", { id, name }),
+  deleteCollection: (id: number) => invoke<void>("delete_collection", { id }),
+  setInCollection: (id: number, entries: EntryKey[], member: boolean) => invoke<void>("set_in_collection", { id, entries, member }),
+  getTheme: () => invoke<ThemeRead>("get_theme"),
+  openThemeFile: () => invoke<void>("open_theme_file"),
+  resetTheme: () => invoke<ThemeRead>("reset_theme"),
+  getUiPrefs: () => invoke<UiPrefs>("get_ui_prefs"),
+  setUiPref: (key: string, value: string) => invoke<void>("set_ui_pref", { key, value }),
 };
 
 if (import.meta.env.DEV) (window as unknown as { hangarProbe: () => Promise<string> }).hangarProbe = () => invoke<string>("debug_epic_probe");

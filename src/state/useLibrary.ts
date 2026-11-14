@@ -1,21 +1,25 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { api, type Game } from "../lib/api";
-import { view, type Filter, type Sort } from "../lib/library";
+import { api, type Collection, type Game } from "../lib/api";
+import { parseTab, tabKey, view, type Sort, type Tab } from "../lib/library";
+
 
 /** `onUpdated` runs on every `library-updated` payload (whose games already carry fresh preferences). */
 export function useLibrary(onUpdated?: () => void) {
   const [games, setGames] = useState<Game[]>([]);
   const [selectedId, select] = useState<number | null>(null);
-  const [filter, setFilter] = useState<Filter>("all");
+  const [tab, setTabState] = useState<Tab>({ kind: "all" });
+  const [installedOnly, setInstalledOnlyState] = useState(false);
+  const [viewMode, setViewModeState] = useState<"grid" | "list">("grid");
+  const [collections, setCollections] = useState<Collection[]>([]);
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<Sort>("recent");
   const [warnings, setWarnings] = useState<string[]>([]);
   const [rescanning, setRescanning] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const mounted = useRef(true);
-  const current = useRef({ filter, query, sort, selectedId });
-  current.current = { filter, query, sort, selectedId };
+  const current = useRef({ query, sort, selectedId });
+  current.current = { query, sort, selectedId };
   const updated = useRef(onUpdated);
   updated.current = onUpdated;
 
@@ -63,6 +67,23 @@ export function useLibrary(onUpdated?: () => void) {
     [rescan],
   );
 
+  const setTab = useCallback((t: Tab) => {
+    setTabState(t);
+    api.setUiPref("ui.tab", tabKey(t)).catch(() => {});
+  }, []);
+  const setInstalledOnly = useCallback((b: boolean) => {
+    setInstalledOnlyState(b);
+    api.setUiPref("ui.installed", b ? "1" : "0").catch(() => {});
+  }, []);
+  const setViewMode = useCallback((m: "grid" | "list") => {
+    setViewModeState(m);
+    api.setUiPref("ui.view", m).catch(() => {});
+  }, []);
+  const reloadCollections = useCallback(async () => {
+    const cs = await api.getCollections();
+    if (mounted.current) setCollections(cs);
+  }, []);
+
   const applyReport = useCallback((r: { warnings: string[] }) => setWarnings(r.warnings), []);
 
   useEffect(() => {
@@ -87,12 +108,30 @@ export function useLibrary(onUpdated?: () => void) {
       ]);
       unlisten.push(u1, u2);
       if (!alive) return unlisten.forEach((u) => u());
+      let t: Tab = { kind: "all" };
+      let inst = false;
+      let vm: "grid" | "list" = "grid";
+      let cols: Collection[] = [];
+      try {
+        cols = await api.getCollections();
+        const p = await api.getUiPrefs();
+        t = parseTab(p.tab, cols);
+        inst = p.installed;
+        vm = p.view === "list" ? "list" : "grid";
+      } catch {
+        /* prefs are best effort */
+      }
+      if (!alive) return;
+      setCollections(cols);
+      setTabState(t);
+      setInstalledOnlyState(inst);
+      setViewModeState(vm);
       try {
         const initial = await api.getLibrary();
         if (!alive) return;
         setGames(initial);
         const c = current.current;
-        if (c.selectedId === null) select(view(initial, c.filter, c.query, c.sort)[0]?.id ?? null);
+        if (c.selectedId === null) select(view(initial, t, inst, cols, c.query, c.sort)[0]?.id ?? null);
       } catch (e) {
         setWarnings([String(e)]);
       }
@@ -106,5 +145,5 @@ export function useLibrary(onUpdated?: () => void) {
     };
   }, [rescan]);
 
-  return { games, selectedId, select, filter, setFilter, query, setQuery, sort, setSort, warnings, rescanning, loaded, rescan, rescanLabeled, scanLabel, applyReport };
+  return { games, selectedId, select, tab, setTab, installedOnly, setInstalledOnly, viewMode, setViewMode, collections, reloadCollections, query, setQuery, sort, setSort, warnings, rescanning, loaded, rescan, rescanLabeled, scanLabel, applyReport };
 }

@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod accounts;
+mod collections;
 mod commands;
 mod login;
 
@@ -63,6 +64,16 @@ fn main() {
             accounts::get_accounts,
             accounts::connect_account,
             accounts::disconnect_account,
+            collections::get_collections,
+            collections::create_collection,
+            collections::rename_collection,
+            collections::delete_collection,
+            collections::set_in_collection,
+            collections::get_theme,
+            collections::open_theme_file,
+            collections::reset_theme,
+            collections::get_ui_prefs,
+            collections::set_ui_pref,
             ] }
             #[cfg(not(debug_assertions))]
             { tauri::generate_handler![
@@ -86,6 +97,16 @@ fn main() {
             accounts::get_accounts,
             accounts::connect_account,
             accounts::disconnect_account,
+            collections::get_collections,
+            collections::create_collection,
+            collections::rename_collection,
+            collections::delete_collection,
+            collections::set_in_collection,
+            collections::get_theme,
+            collections::open_theme_file,
+            collections::reset_theme,
+            collections::get_ui_prefs,
+            collections::set_ui_pref,
             ] }
         })
         .run(tauri::generate_context!())

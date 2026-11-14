@@ -8,12 +8,13 @@ import AccountsSection from "./AccountsSection";
 interface Props {
   settings: Settings;
   onSaved: () => Promise<void>;
+  onResetTheme?: () => Promise<void>;
   onScanned?: (r: ScanReport) => void;
   onAccountsChanged?: (label?: string) => Promise<void>;
   onClose: () => void;
 }
 
-export default function SettingsDialog({ settings, onSaved, onScanned, onAccountsChanged, onClose }: Props) {
+export default function SettingsDialog({ settings, onSaved, onResetTheme, onScanned, onAccountsChanged, onClose }: Props) {
   const [key, setKey] = useState(settings.steam_api_key ?? "");
   const [steamId, setSteamId] = useState(settings.steam_id ?? "");
   const [show, setShow] = useState(false);
@@ -95,6 +96,13 @@ export default function SettingsDialog({ settings, onSaved, onScanned, onAccount
           <div className="row">
             <button type="button" className="ghost" onClick={addFolder}>Klasör ekle</button>
             <button type="button" className="ghost" disabled={folders.length === 0} onClick={() => setScanning(true)}>Klasörleri tara</button>
+          </div>
+        </div>
+        <div className="fld">
+          <span>Görünüm</span>
+          <div className="row">
+            <button type="button" className="ghost" onClick={() => api.openThemeFile().catch((err) => setError(String(err)))}>Tema dosyasını aç</button>
+            <button type="button" className="ghost" onClick={() => onResetTheme?.().catch((err) => setError(String(err)))}>Varsayılana dön</button>
           </div>
         </div>
         <AccountsSection onChanged={onAccountsChanged ?? (async () => {})} />

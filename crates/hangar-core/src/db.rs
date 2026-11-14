@@ -2,8 +2,34 @@ use crate::accounts::epic::CatalogInfo;
 use crate::merge::{display_base, edition_of, normalize, Override};
 use crate::model::{Game, Platform, PlatformEntry};
 use rusqlite::{params, Connection, OptionalExtension, Result};
+use serde::Serialize;
 use std::collections::HashMap;
 use std::path::Path;
+
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub struct Collection {
+    pub id: i64,
+    pub name: String,
+    pub entries: Vec<(Platform, String)>,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum NameError {
+    Empty,
+    Duplicate,
+}
+
+/// Trim + Turkish-aware lowercase (`İ→i`, `I→ı`), used for collection name uniqueness.
+pub fn fold_name(s: &str) -> String {
+    s.trim()
+        .chars()
+        .flat_map(|c| match c {
+            'İ' => vec!['i'],
+            'I' => vec!['ı'],
+            c => c.to_lowercase().collect(),
+        })
+        .collect()
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct LocalGame {
@@ -59,8 +85,9 @@ fn resolve_preferred(entries: &[PlatformEntry], stored: &str) -> Option<(Platfor
         .map(|e| (p, e.platform_id.clone()))
 }
 
-/// Preferred, else the installed entry with the latest last_played (ties: menu order), else (nothing
-/// installed) non-Original editions first, then menu order. `entries` must be in menu order.
+/// Preferred, else an installed Steam entry if any, else the installed entry with the latest
+/// last_played (ties: menu order; among Steam entries too), else (nothing installed) non-Original
+/// editions first, then menu order. `entries` must be in menu order.
 fn default_entry(
     entries: &[PlatformEntry],
     preferred: Option<&(Platform, String)>,
@@ -70,7 +97,8 @@ fn default_entry(
     }
     let key = |e: &PlatformEntry| (e.platform, e.platform_id.clone());
     let mut best: Option<&PlatformEntry> = None;
-    for e in entries.iter().filter(|e| e.installed) {
+    let any_steam = entries.iter().any(|e| e.installed && e.platform == Platform::Steam);
+    for e in entries.iter().filter(|e| e.installed && (!any_steam || e.platform == Platform::Steam)) {
         if best.is_none_or(|b| e.last_played > b.last_played) {
             best = Some(e);
         }
@@ -125,7 +153,17 @@ impl Db {
              CREATE TABLE IF NOT EXISTS owned_cache(
                 platform TEXT PRIMARY KEY,
                 json TEXT NOT NULL,
-                fetched_at INTEGER NOT NULL);",
+                fetched_at INTEGER NOT NULL);
+             CREATE TABLE IF NOT EXISTS collections(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                position INTEGER NOT NULL,
+                created_at INTEGER NOT NULL);
+             CREATE TABLE IF NOT EXISTS collection_entries(
+                collection_id INTEGER NOT NULL,
+                platform TEXT NOT NULL,
+                platform_id TEXT NOT NULL,
+                PRIMARY KEY(collection_id, platform, platform_id));",
         )?;
         // Older DBs lack the column.
         let has_cover: bool = conn
@@ -484,6 +522,110 @@ impl Db {
         Ok(out)
     }
 
+    pub fn collections(&self) -> Result<Vec<Collection>> {
+        let mut out: Vec<Collection> = Vec::new();
+        let mut st = self
+            .conn
+            .prepare("SELECT id, name FROM collections ORDER BY position, id")?;
+        for row in st.query_map([], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?)))? {
+            let (id, name) = row?;
+            out.push(Collection { id, name, entries: Vec::new() });
+        }
+        let mut st = self.conn.prepare(
+            "SELECT collection_id, platform, platform_id FROM collection_entries
+             ORDER BY platform, platform_id",
+        )?;
+        let rows = st.query_map([], |r| {
+            Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?))
+        })?;
+        for row in rows {
+            let (cid, plat, pid) = row?;
+            let Some(p) = Platform::ALL.into_iter().find(|p| p.as_str() == plat) else {
+                continue;
+            };
+            if let Some(c) = out.iter_mut().find(|c| c.id == cid) {
+                c.entries.push((p, pid));
+            }
+        }
+        Ok(out)
+    }
+
+    /// `except`: the collection being renamed (its own name does not count as a duplicate).
+    fn check_collection_name(
+        &self,
+        name: &str,
+        except: Option<i64>,
+    ) -> Result<std::result::Result<String, NameError>> {
+        let name = name.trim();
+        if name.is_empty() {
+            return Ok(Err(NameError::Empty));
+        }
+        let folded = fold_name(name);
+        let mut st = self.conn.prepare("SELECT id, name FROM collections")?;
+        for row in st.query_map([], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?)))? {
+            let (id, other) = row?;
+            if Some(id) != except && fold_name(&other) == folded {
+                return Ok(Err(NameError::Duplicate));
+            }
+        }
+        Ok(Ok(name.to_string()))
+    }
+
+    pub fn create_collection(&self, name: &str) -> Result<std::result::Result<i64, NameError>> {
+        let name = match self.check_collection_name(name, None)? {
+            Ok(n) => n,
+            Err(e) => return Ok(Err(e)),
+        };
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0);
+        self.conn.execute(
+            "INSERT INTO collections(name, position, created_at)
+             VALUES(?1, (SELECT COALESCE(MAX(position), 0) + 1 FROM collections), ?2)",
+            params![name, now],
+        )?;
+        Ok(Ok(self.conn.last_insert_rowid()))
+    }
+
+    pub fn rename_collection(&self, id: i64, name: &str) -> Result<std::result::Result<(), NameError>> {
+        let name = match self.check_collection_name(name, Some(id))? {
+            Ok(n) => n,
+            Err(e) => return Ok(Err(e)),
+        };
+        self.conn
+            .execute("UPDATE collections SET name = ?1 WHERE id = ?2", params![name, id])?;
+        Ok(Ok(()))
+    }
+
+    pub fn delete_collection(&self, id: i64) -> Result<()> {
+        let tx = self.conn.unchecked_transaction()?;
+        tx.execute("DELETE FROM collection_entries WHERE collection_id = ?1", [id])?;
+        tx.execute("DELETE FROM collections WHERE id = ?1", [id])?;
+        tx.commit()
+    }
+
+    /// Adds or removes the given entries (all entries of one card) to/from a collection.
+    pub fn set_in_collection(&self, id: i64, entries: &[(Platform, String)], member: bool) -> Result<()> {
+        let tx = self.conn.unchecked_transaction()?;
+        for (p, pid) in entries {
+            if member {
+                tx.execute(
+                    "INSERT OR IGNORE INTO collection_entries(collection_id, platform, platform_id)
+                     VALUES(?1, ?2, ?3)",
+                    params![id, p.as_str(), pid],
+                )?;
+            } else {
+                tx.execute(
+                    "DELETE FROM collection_entries
+                     WHERE collection_id = ?1 AND platform = ?2 AND platform_id = ?3",
+                    params![id, p.as_str(), pid],
+                )?;
+            }
+        }
+        tx.commit()
+    }
+
     /// Ignores an exact duplicate.
     pub fn add_override(&self, o: Override) -> Result<()> {
         let (ap, bp) = (o.a.0.as_str(), o.b.0.as_str());
@@ -744,12 +886,18 @@ mod tests {
     #[test]
     fn default_entry_rules() {
         let db = Db::open_in_memory().unwrap();
-        // Installed: latest played wins over platform priority.
+        // Installed Steam wins even when another store was played later.
         one_card(
             &db,
             vec![pe(Platform::Steam, "s", "X", true, Some(10)), pe(Platform::Gog, "g", "X", true, Some(20)), pe(Platform::Epic, "e", "X", false, Some(99))],
         );
-        assert_eq!(db.games().unwrap()[0].default_entry, Some((Platform::Gog, "g".to_string())));
+        assert_eq!(db.games().unwrap()[0].default_entry, Some((Platform::Steam, "s".to_string())));
+        // No Steam: latest played installed wins over platform priority.
+        one_card(&db, vec![pe(Platform::Gog, "g", "X", true, Some(10)), pe(Platform::Epic, "e", "X", true, Some(20))]);
+        assert_eq!(db.games().unwrap()[0].default_entry, Some((Platform::Epic, "e".to_string())));
+        // Two installed Steam copies: the latest played one.
+        one_card(&db, vec![pe(Platform::Steam, "s1", "X", true, Some(10)), pe(Platform::Steam, "s2", "X", true, Some(20))]);
+        assert_eq!(db.games().unwrap()[0].default_entry, Some((Platform::Steam, "s2".to_string())));
         // Tie: platform priority.
         one_card(&db, vec![pe(Platform::Gog, "g", "X", true, None), pe(Platform::Steam, "s", "X", true, None)]);
         assert_eq!(db.games().unwrap()[0].default_entry, Some((Platform::Steam, "s".to_string())));
@@ -759,6 +907,10 @@ mod tests {
             vec![pe(Platform::Steam, "s", "X", false, None), pe(Platform::Gog, "g", "X Remastered", false, None), pe(Platform::Epic, "e", "X Remastered", false, None)],
         );
         assert_eq!(db.games().unwrap()[0].default_entry, Some((Platform::Epic, "e".to_string())));
+        // (Last: the preference sticks to the card row.) A preference wins over Steam.
+        let id = one_card(&db, vec![pe(Platform::Steam, "s", "X", true, Some(10)), pe(Platform::Gog, "g", "X", true, Some(20))]);
+        db.set_preferred(id, Platform::Gog, Some("g")).unwrap();
+        assert_eq!(db.games().unwrap()[0].default_entry, Some((Platform::Gog, "g".to_string())));
     }
 
     #[test]
@@ -802,6 +954,88 @@ mod tests {
         let mut t: Vec<String> = db.games().unwrap().into_iter().map(|g| g.title).collect();
         t.sort();
         assert_eq!(t, ["BioShock", "BioShock Infinite Complete Edition", "BioShock Remastered"]);
+    }
+
+    #[test]
+    fn collections_crud() {
+        let db = Db::open_in_memory().unwrap();
+        let a = db.create_collection("A").unwrap().unwrap();
+        let b = db.create_collection("B").unwrap().unwrap();
+        let names: Vec<String> = db.collections().unwrap().into_iter().map(|c| c.name).collect();
+        assert_eq!(names, ["A", "B"]);
+        assert_eq!(db.rename_collection(a, "C").unwrap(), Ok(()));
+        assert_eq!(db.rename_collection(a, "B").unwrap(), Err(NameError::Duplicate));
+        assert_eq!(db.rename_collection(a, "C").unwrap(), Ok(()));
+        assert_eq!(db.rename_collection(a, "A").unwrap(), Ok(()));
+        db.set_in_collection(b, &[(Platform::Steam, "1".into())], true).unwrap();
+        db.delete_collection(b).unwrap();
+        assert_eq!(db.collections().unwrap().len(), 1);
+        let n: i64 = db
+            .conn
+            .query_row("SELECT COUNT(*) FROM collection_entries", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(n, 0);
+    }
+
+    #[test]
+    fn collection_names_turkish_fold() {
+        let db = Db::open_in_memory().unwrap();
+        db.create_collection("İndie").unwrap().unwrap();
+        assert_eq!(db.create_collection("indie").unwrap(), Err(NameError::Duplicate));
+        db.create_collection("Işık").unwrap().unwrap();
+        assert_eq!(db.create_collection("ışık").unwrap(), Err(NameError::Duplicate));
+        assert_eq!(db.create_collection("   ").unwrap(), Err(NameError::Empty));
+        db.create_collection("  AC  ").unwrap().unwrap();
+        assert!(db.collections().unwrap().iter().any(|c| c.name == "AC"));
+    }
+
+    #[test]
+    fn membership_survives_split_and_merge() {
+        let db = Db::open_in_memory().unwrap();
+        let entries = vec![
+            pe(Platform::Steam, "1", "Game", false, None),
+            pe(Platform::Ubisoft, "541", "Game", false, None),
+        ];
+        one_card(&db, entries.clone());
+        let c = db.create_collection("X").unwrap().unwrap();
+        let keys = [(Platform::Steam, "1".to_string()), (Platform::Ubisoft, "541".to_string())];
+        db.set_in_collection(c, &keys, true).unwrap();
+        // Split, then re-write the library through the override mechanism.
+        db.add_override(Override { a: keys[0].clone(), b: keys[1].clone(), merged: false }).unwrap();
+        db.replace_entries(crate::merge::group(entries.clone(), &db.overrides().unwrap())).unwrap();
+        assert_eq!(db.games().unwrap().len(), 2);
+        assert_eq!(db.collections().unwrap()[0].entries.len(), 2);
+        // Merge back.
+        db.add_override(Override { a: keys[0].clone(), b: keys[1].clone(), merged: true }).unwrap();
+        db.replace_entries(crate::merge::group(entries, &db.overrides().unwrap())).unwrap();
+        assert_eq!(db.games().unwrap().len(), 1);
+        let got = db.collections().unwrap()[0].entries.clone();
+        assert!(keys.iter().all(|k| got.contains(k)) && got.len() == 2);
+    }
+
+    #[test]
+    fn rescan_keeps_membership() {
+        let db = Db::open_in_memory().unwrap();
+        one_card(&db, vec![pe(Platform::Steam, "1", "Game", false, None)]);
+        let c = db.create_collection("X").unwrap().unwrap();
+        db.set_in_collection(c, &[(Platform::Steam, "1".into())], true).unwrap();
+        db.replace_entries(vec![]).unwrap();
+        assert!(db.games().unwrap().is_empty());
+        assert_eq!(db.collections().unwrap()[0].entries, [(Platform::Steam, "1".to_string())]);
+    }
+
+    #[test]
+    fn set_in_collection_idempotent() {
+        let db = Db::open_in_memory().unwrap();
+        let c = db.create_collection("X").unwrap().unwrap();
+        let e = [(Platform::Steam, "1".to_string()), (Platform::Gog, "2".to_string())];
+        db.set_in_collection(c, &e[..1], true).unwrap();
+        db.set_in_collection(c, &e[..1], true).unwrap();
+        assert_eq!(db.collections().unwrap()[0].entries.len(), 1);
+        db.set_in_collection(c, &e, true).unwrap();
+        assert_eq!(db.collections().unwrap()[0].entries.len(), 2);
+        db.set_in_collection(c, &e, false).unwrap();
+        assert!(db.collections().unwrap()[0].entries.is_empty());
     }
 
     /// Dry run on a COPY of the live DB: `HANGAR_DB=<copy> HANGAR_DRY_OUT=<report.md> cargo test -p

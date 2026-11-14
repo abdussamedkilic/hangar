@@ -6,6 +6,7 @@ pub mod local_scan;
 pub mod merge;
 pub mod model;
 pub mod providers;
+pub mod theme;
 pub mod vdf;
 
 pub fn version() -> &'static str {
