@@ -6,6 +6,8 @@ mod login;
 
 use hangar_core::accounts::epic::EpicClient;
 use hangar_core::accounts::epic_api::HttpEpicApi;
+use hangar_core::accounts::ubisoft::UbiClient;
+use hangar_core::accounts::ubisoft_api::HttpUbiApi;
 use hangar_core::accounts::store::SecretStore;
 use hangar_core::db::Db;
 use std::sync::Mutex;
@@ -23,20 +25,27 @@ fn main() {
             app.manage(commands::CoversDir(dir.join("covers")));
             app.manage(commands::DbPath(dir.join("hangar.db")));
             app.manage(commands::CoverJob::default());
-            #[cfg(windows)]
-            let store: Box<dyn SecretStore> =
-                Box::new(hangar_core::accounts::store::DpapiStore::new(dir.join("accounts")));
-            #[cfg(not(windows))]
-            let store: Box<dyn SecretStore> = Box::new(hangar_core::accounts::store::MemoryStore::default());
-            app.manage(EpicClient::new(Box::new(HttpEpicApi), store));
+            app.manage(commands::LastScan::default());
+            let new_store = || -> Box<dyn SecretStore> {
+                #[cfg(windows)]
+                { Box::new(hangar_core::accounts::store::DpapiStore::new(dir.join("accounts"))) }
+                #[cfg(not(windows))]
+                { Box::new(hangar_core::accounts::store::MemoryStore::default()) }
+            };
+            app.manage(EpicClient::new(Box::new(HttpEpicApi), new_store()));
+            app.manage(UbiClient::new(Box::new(HttpUbiApi), new_store()));
             Ok(())
         })
         .invoke_handler({
             #[cfg(debug_assertions)]
             { tauri::generate_handler![
             login::debug_epic_probe,
+            login::debug_ubisoft_probe,
+            accounts::debug_ubisoft_graphql,
+            accounts::debug_ubisoft_demux,
             commands::get_library,
             commands::rescan,
+            commands::galaxy_changed_since_scan,
             commands::launch,
             commands::set_preferred,
             commands::set_cover,
@@ -59,6 +68,7 @@ fn main() {
             { tauri::generate_handler![
             commands::get_library,
             commands::rescan,
+            commands::galaxy_changed_since_scan,
             commands::launch,
             commands::set_preferred,
             commands::set_cover,

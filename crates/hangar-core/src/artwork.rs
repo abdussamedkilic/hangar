@@ -42,7 +42,7 @@ pub fn is_allowed_cover_url(url: &str) -> bool {
     sub("epicgames.com")
         || sub("unrealengine.com")
         || sub("steamstatic.com")
-        || ["images.gog.com", "images.gog-statics.com", "api.gog.com", "steamcdn-a.akamaihd.net"].contains(&host)
+        || ["images.gog.com", "images.gog-statics.com", "api.gog.com", "steamcdn-a.akamaihd.net", "ubiservices.cdn.ubi.com", "ubistatic3-a.akamaihd.net"].contains(&host)
 }
 
 /// Like `get_bytes` but only for allowed hosts, and redirects are not followed.
@@ -602,6 +602,8 @@ mod tests {
             "https://cdn2.unrealengine.com/x.jpg",
             "https://cdn.cloudflare.steamstatic.com/x.jpg",
             "https://steamcdn-a.akamaihd.net/x.jpg",
+            "https://ubiservices.cdn.ubi.com/c.jpg",
+            "https://ubistatic3-a.akamaihd.net/orbit/uplay_launcher_3_0/assets/a.jpg",
         ] {
             assert!(is_allowed_cover_url(ok), "{ok}");
         }
@@ -616,6 +618,9 @@ mod tests {
             "https://evil-unrealengine.com/x.jpg",
             "https://unrealengine.com/x.jpg",
             "https://127.0.0.1/a.jpg",
+            "https://evil.ubiservices.cdn.ubi.com.io/a.jpg",
+            "http://ubiservices.cdn.ubi.com/a.jpg",
+            "http://ubistatic3-a.akamaihd.net/a.jpg",
             "not a url",
         ] {
             assert!(!is_allowed_cover_url(bad), "{bad}");

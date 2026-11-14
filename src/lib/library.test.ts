@@ -22,6 +22,7 @@ describe("normalize (parity with Rust)", () => {
     expect(normalize("Game of the Year Edition")).toBe("game of the year edition");
     expect(normalize("BioShock™ Remastered - Amazon Prime")).toBe("bioshock");
     expect(normalize("Hades - Amazon Prime")).toBe("hades");
+    expect(normalize("Warbreeds - Amazon Luna")).toBe(normalize("WarBreeds"));
     expect(normalize("Baldur's Gate Enhanced Edition")).toBe("baldur s gate");
     expect(normalize("BioShock 2")).toBe("bioshock 2");
   });

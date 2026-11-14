@@ -37,11 +37,25 @@ Epic hesabını bağlarsan sahip olduğun ama kurulu olmayan Epic oyunları da l
 - **Kaydedilemezse:** bağlanırken belge diske yazılamazsa "Bağlantı kaydedilemedi" hatası görünür. Sonradan yenilenen belge yazılamazsa Hangar onu yeniden başlatmaya kadar bellekte tutar; yeniden başlatınca tekrar bağlanman gerekebilir.
 - **Nasıl silinir:** "Bağlantıyı kes" dosyayı siler, Epic'teki oturumu kapatır ve Hangar'ın Epic oyun listesi ile başlık önbelleklerini temizler. Dosya elle de silinebilir.
 - **Epic'te görünüşü:** Hangar, Epic Games Launcher'ın herkese açık istemci kimliğini kullanır. Bu yüzden Epic hesap sayfasında bağlantı "Epic Games Launcher" olarak görünür.
-- **Resmi olmayan servis:** Epic bu yolu engelleyebilir; o zaman yalnızca kurulu Epic oyunları görünür.
+- **Çekiliş/ödül oyunları:** Ubisoft'un normal oyun listesi hiç başlatılmamış ya da çekilişle gelen oyunları göstermiyor. Hangar bunlar için Ubisoft Connect'in iç protokolünü (demux) yalnızca okuma amacıyla kullanır.
+- **Uygulama kimliği:** saklanan yenileme belgesi Ubisoft Connect masaüstü uygulamasının kimliğine aittir; Ubisoft hesap sayfasında bu şekilde görünebilir.
+- **Güncelleme sonrası:** bu sürümden önce bağlandıysan Ubisoft hesabını bir kez yeniden bağlaman gerekir.
+- **Resmi olmayan servis:** Hangar Ubisoft'un belgelenmemiş uç noktalarını ve protokolünü kullanır. Ubisoft bunları değiştirebilir ya da engelleyebilir; demux çalışmazsa yalnızca normal (GraphQL) liste, o da çalışmazsa yalnızca kurulu Ubisoft oyunları görünür.
 - **Kullanım koşulları:** bu yol Epic'in kullanım koşullarına aykırı sayılabilir. En kötü durumda hesap işaretlenebilir. Legendary, Heroic ve Playnite aynı yolu kullanıyor, ama bu bir garanti değil.
 - **Belgenin kapsamı:** belge hesabın tamamına erişir. DPAPI, aynı kullanıcıyla çalışan zararlı yazılıma karşı koruma sağlamaz.
 - **Sunucu yok:** Hangar'ın sunucusu yok; veri yalnızca Epic'e gider.
 - **Kalıcı belge istemiyorsan:** işin bitince bağlantıyı kes.
+
+## Hesap bağlantıları (Ubisoft)
+
+Ubisoft Connect hesabını bağlarsan sahip olduğun ama kurulu olmayan Ubisoft oyunları da listelenir. Bağlanmak isteğe bağlıdır.
+
+- **Giriş:** Hangar, Ubisoft'un kendi giriş sayfasını ayrı bir pencerede açar; şifreni Hangar görmez.
+- **Ne saklanıyor:** yalnızca yenileme belgesi, geçerlilik süresi, Ubisoft hesap kimliği ve görünen ad, `%APPDATA%\com.hangar.app\accounts\ubisoft.dat` dosyasında. Windows DPAPI ile şifreli; yalnızca bu Windows kullanıcısı çözebilir.
+- **Nasıl silinir:** "Bağlantıyı kes" dosyayı siler, Ubisoft'taki oturumu kapatır ve Hangar'ın Ubisoft oyun listesini temizler. Dosya elle de silinebilir.
+- **Resmi olmayan servis:** Hangar Ubisoft'un belgelenmemiş uç noktalarını ve Ubisoft Connect'in uygulama kimliğini kullanır. Ubisoft bunları değiştirebilir ya da engelleyebilir; o zaman yalnızca kurulu Ubisoft oyunları görünür.
+- **Belgenin kapsamı:** belge hesabın tamamına erişir. DPAPI, aynı kullanıcıyla çalışan zararlı yazılıma karşı koruma sağlamaz.
+- **Sunucu yok:** Hangar'ın sunucusu yok; veri yalnızca Ubisoft'a gider.
 
 ## Mimari
 

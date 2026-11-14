@@ -48,12 +48,35 @@ fn is_facebook(host: &str) -> bool {
     matches!(host, "www.facebook.com" | "m.facebook.com" | "web.facebook.com")
 }
 
-fn nav_allowed(url: &url::Url) -> bool {
+/// Ubisoft Connect girişi (U0 keşfi): tam konak connect/account.ubisoft.com + captcha; port yok, yalnızca https.
+pub const UBI_NAV_RULES: &[(&str, bool, &[&str])] = &[
+    ("connect.ubisoft.com", true, &[]),
+    ("account.ubisoft.com", true, &[]),
+    ("hcaptcha.com", false, &[]),
+    ("arkoselabs.com", false, &[]),
+    ("funcaptcha.com", false, &[]),
+];
+
+/// Ubisoft Connect web uygulaması kimliği (dönebilir; tek yerde dursun).
+pub const UBI_APP_ID: &str = "82b650c0-6cb3-40c0-9f41-25a53b62b206";
+/// Ubisoft Connect PC launcher app id. The demux service only accepts tickets issued for it, while the
+/// web login page only accepts `UBI_APP_ID`. An `rm_v1` refresh with this id converts the web
+/// remember-me ticket (and invalidates the web one).
+pub const UBI_LAUNCHER_APP_ID: &str = "f68a4bb5-608a-4ff2-8123-be8ef797e0a6";
+pub const UBI_GENOME_ID: &str = "42d07c95-9914-4450-8b38-267c4e462b21";
+
+pub fn ubi_login_url() -> String {
+    format!(
+        "https://connect.ubisoft.com/login?appId={UBI_APP_ID}&genomeId={UBI_GENOME_ID}&lang=en-US&nextUrl=https:%2F%2Fconnect.ubisoft.com%2Fready"
+    )
+}
+
+fn nav_allowed_with(url: &url::Url, rules: &[(&str, bool, &[&str])]) -> bool {
     let host = url.host_str().unwrap_or("");
     let path = url.path();
     url.scheme() == "https"
         && url.port().is_none()
-        && NAV_RULES.iter().any(|(h, exact, prefixes)| {
+        && rules.iter().any(|(h, exact, prefixes)| {
             let host_ok = host == *h || (!*exact && host.ends_with(&format!(".{h}")));
             host_ok
                 && (prefixes.is_empty()
@@ -103,7 +126,39 @@ pub fn init_script(nonce: &str) -> String {
     )
 }
 
+/// Ubisoft girişi için betik: `connect.ubisoft.com` üst çerçevesinde localStorage'ı yoklar;
+/// `PRODloginData` içinde `ticket` görününce JSON'u nonce'lu geri dönüş adresiyle yollar.
+pub fn ubi_init_script(nonce: &str) -> String {
+    assert!(
+        nonce.len() == 32 && nonce.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')),
+        "invalid nonce"
+    );
+    format!(
+        r#"(function(){{try{{
+  if (window.top !== window) return;
+  if (location.origin !== 'https://connect.ubisoft.com') return;
+  var N = '{nonce}';
+  var n = 0;
+  var t = setInterval(function(){{ try {{
+    if (++n > 600) {{ clearInterval(t); return; }}
+    var raw = localStorage.getItem('PRODloginData');
+    if (!raw) return;
+    var login = JSON.parse(raw);
+    if (!login || !login.ticket) return;
+    clearInterval(t);
+    var rem = null;
+    try {{ rem = JSON.parse(localStorage.getItem('PRODrememberMe')); }} catch(e){{}}
+    location.replace('https://hangar.invalid/callback?n=' + N + '&code=' + encodeURIComponent(JSON.stringify({{login: login, remember: rem}})));
+  }} catch(e){{}} }}, 500);
+}}catch(e){{}}}})();"#
+    )
+}
+
 pub fn decide(url: &url::Url, nonce: &str) -> NavDecision {
+    decide_with(url, nonce, NAV_RULES)
+}
+
+pub fn decide_with(url: &url::Url, nonce: &str, rules: &[(&str, bool, &[&str])]) -> NavDecision {
     let host = url.host_str().unwrap_or("");
     if host == "hangar.invalid" {
         if url.scheme() == "https" && url.path() == "/callback" {
@@ -118,7 +173,7 @@ pub fn decide(url: &url::Url, nonce: &str) -> NavDecision {
         }
         return NavDecision::Block;
     }
-    if nav_allowed(url) {
+    if nav_allowed_with(url, rules) {
         return NavDecision::Allow;
     }
     NavDecision::Block
@@ -126,6 +181,10 @@ pub fn decide(url: &url::Url, nonce: &str) -> NavDecision {
 
 pub fn window_title(url: &url::Url) -> String {
     format!("Epic Games girişi — {}", url.host_str().unwrap_or(""))
+}
+
+pub fn ubi_window_title(url: &url::Url) -> String {
+    format!("Ubisoft Connect girişi — {}", url.host_str().unwrap_or(""))
 }
 
 pub fn open_error(uri: &str, err: &str) -> String {
@@ -174,6 +233,27 @@ mod tests {
         assert!(a.chars().all(|c| matches!(c, '0'..='9' | 'a'..='f')));
         assert_ne!(a, b);
     }
+    #[test] fn ubi_allowlist() {
+        let d = |s: &str| decide_with(&u(s), N, UBI_NAV_RULES);
+        for ok in ["https://connect.ubisoft.com/login?x=1", "https://account.ubisoft.com/en-US/login", "https://newassets.hcaptcha.com/x", "https://client-api.arkoselabs.com/"] {
+            assert!(matches!(d(ok), NavDecision::Allow), "{ok}");
+        }
+        for bad in ["http://connect.ubisoft.com/", "https://connect.ubisoft.com:8443/", "https://evil-ubisoft.com/", "https://forum.ubisoft.com/", "https://store.ubisoft.com/", "https://static.ubisoft.com/a", "https://public-ubiservices.ubi.com/v3", "https://ubisoft.com.evil.io/", "https://www.epicgames.com/", "https://example.com/"] {
+            assert!(matches!(d(bad), NavDecision::Block), "{bad}");
+        }
+        assert!(matches!(decide(&u("https://connect.ubisoft.com/"), N), NavDecision::Block));
+    }
+    #[test] fn ubi_callback_carries_json() {
+        let s = format!("https://hangar.invalid/callback?n={N}&code=%7B%22login%22%3A%7B%22ticket%22%3A%22t%22%7D%7D");
+        assert!(matches!(decide_with(&u(&s), N, UBI_NAV_RULES), NavDecision::Callback(c) if c == r#"{"login":{"ticket":"t"}}"#));
+    }
+    #[test] fn ubi_init_script_scoped() {
+        let s = ubi_init_script(N);
+        for p in [N, "window.top", "https://connect.ubisoft.com", "PRODloginData", "PRODrememberMe", "500", "https://hangar.invalid/callback?n="] { assert!(s.contains(p), "{p}"); }
+        assert!(!s.contains("epicgames"));
+    }
+    #[test] #[should_panic] fn ubi_init_script_rejects_bad_nonce() { ubi_init_script("a';alert(1);'"); }
+    #[test] fn ubi_login_url_has_app_id() { assert!(ubi_login_url().contains(UBI_APP_ID)); }
     #[test] fn title_shows_host() { assert_eq!(window_title(&u("https://www.epicgames.com/id/login")), "Epic Games girişi — www.epicgames.com"); }
     #[test] fn open_error_texts() {
         assert_eq!(open_error("com.epicgames.launcher://apps/x?action=install", "e"), "Epic Games Launcher açılamadı — kurulu mu?");

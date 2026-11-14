@@ -1,4 +1,4 @@
-use super::{AuthError, StoredCred};
+use super::{AuthError, StoredCred, UbiCred};
 use crate::model::Platform;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -78,6 +78,26 @@ pub fn load_cred(store: &dyn SecretStore) -> Result<Option<StoredCred>, AuthErro
     match parsed {
         Ok(c) if c.v == 1 => Ok(Some(c)),
         // Readable but from an unknown format version: not usable, but not ours to delete.
+        Ok(_) => Err(AuthError::NotConnected),
+        Err(_) => Err(AuthError::Corrupt),
+    }
+}
+
+pub fn save_ubi_cred(store: &dyn SecretStore, c: &UbiCred) -> std::io::Result<()> {
+    let mut json = serde_json::to_vec(c).map_err(std::io::Error::other)?;
+    let r = store.save(Platform::Ubisoft, &json);
+    zeroize::Zeroize::zeroize(&mut json);
+    r
+}
+
+pub fn load_ubi_cred(store: &dyn SecretStore) -> Result<Option<UbiCred>, AuthError> {
+    let Some(mut raw) = store.load(Platform::Ubisoft)? else {
+        return Ok(None);
+    };
+    let parsed = serde_json::from_slice::<UbiCred>(&raw);
+    zeroize::Zeroize::zeroize(&mut raw);
+    match parsed {
+        Ok(c) if c.v == 2 => Ok(Some(c)),
         Ok(_) => Err(AuthError::NotConnected),
         Err(_) => Err(AuthError::Corrupt),
     }

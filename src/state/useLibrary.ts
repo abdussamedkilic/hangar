@@ -31,6 +31,25 @@ export function useLibrary(onUpdated?: () => void) {
     }
   }, []);
 
+  // Window focus: pick up new GOG purchases (Galaxy DB newer than the last scan), at most once per 10 s.
+  const busy = useRef(false);
+  busy.current = rescanning;
+  useEffect(() => {
+    let last = 0;
+    const onFocus = async () => {
+      const now = Date.now();
+      if (busy.current || now - last < 10_000) return;
+      last = now;
+      try {
+        if (await api.galaxyChangedSinceScan()) await rescan();
+      } catch {
+        /* focus check is best effort */
+      }
+    };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [rescan]);
+
   const [scanLabel, setScanLabel] = useState<string | null>(null);
   const rescanLabeled = useCallback(
     async (label: string) => {

@@ -1410,6 +1410,7 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-dialog",
  "tauri-plugin-opener",
+ "zeroize",
 ]
 
 [[package]]
@@ -1418,10 +1419,12 @@ version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
  "rusqlite",
+ "rustls",
  "serde",
  "serde_json",
  "ureq",
  "url",
+ "webpki-roots 0.26.11",
  "windows-sys 0.61.2",
  "winreg 0.52.0",
  "zeroize",

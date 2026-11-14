@@ -27,12 +27,44 @@ pub fn scan_all(
     for (platform, result) in owned {
         match result {
             Ok(list) => {
-                for o in list {
-                    let installed = entries
-                        .iter_mut()
-                        .find(|e| e.platform == platform && e.platform_id == o.platform_id);
-                    match installed {
-                        Some(e) => {
+                // Title fallback is Ubisoft-only (registry number vs GraphQL spaceId) and needs the
+                // same card key + copy marker; each installed entry is claimed at most once, and an
+                // owned title that occurs more than once is ambiguous and never absorbed by title.
+                let key_of = |t: &str| (crate::merge::card_key(t), crate::merge::edition_of(t).copy);
+                let mut claimed: Vec<bool> = vec![false; entries.len()];
+                for o in &list {
+                    if let Some(i) = entries
+                        .iter()
+                        .position(|e| e.platform == platform && e.platform_id == o.platform_id)
+                    {
+                        claimed[i] = true;
+                    }
+                }
+                let owned_keys: Vec<_> = list.iter().map(|o| key_of(&o.title)).collect();
+                for (n, o) in list.into_iter().enumerate() {
+                    let by_id = entries
+                        .iter()
+                        .position(|e| e.platform == platform && e.platform_id == o.platform_id);
+                    let idx = by_id.or_else(|| {
+                        if platform != Platform::Ubisoft
+                            || owned_keys.iter().filter(|k| **k == owned_keys[n]).count() != 1
+                        {
+                            return None;
+                        }
+                        let cands: Vec<usize> = (0..claimed.len())
+                            .filter(|&i| {
+                                !claimed[i]
+                                    && entries[i].platform == platform
+                                    && entries[i].installed
+                                    && key_of(&entries[i].title) == owned_keys[n]
+                            })
+                            .collect();
+                        (cands.len() == 1).then(|| cands[0])
+                    });
+                    match idx {
+                        Some(i) => {
+                            claimed[i] = true;
+                            let e = &mut entries[i];
                             if o.playtime_min.is_some() {
                                 e.playtime_min = o.playtime_min;
                             }
@@ -44,7 +76,10 @@ pub fn scan_all(
                                 e.cover_url = o.cover_url;
                             }
                         }
-                        None => entries.push(o),
+                        None => {
+                            entries.push(o);
+                            claimed.push(false);
+                        }
                     }
                 }
             }
@@ -158,6 +193,55 @@ mod tests {
 
     fn fake(p: Platform, v: Vec<PlatformEntry>) -> Box<dyn LibraryProvider> {
         Box::new(Fake(p, Ok(v)))
+    }
+
+    #[test]
+    fn owned_merges_into_installed_by_title() {
+        let db = Db::open_in_memory().unwrap();
+        let provs = vec![fake(Platform::Ubisoft, vec![entry(Platform::Ubisoft, "541", "Watch_Dogs", true)])];
+        let mut o = entry(Platform::Ubisoft, "space-guid", "WATCH_DOGS\u{2122}", false);
+        o.cover_url = Some("https://ubiservices.cdn.ubi.com/c.jpg".into());
+        let other = entry(Platform::Ubisoft, "space2", "Far Cry 4", false);
+        scan_all(&db, &provs, vec![(Platform::Ubisoft, Ok(vec![o, other]))]).unwrap();
+        let games = db.games().unwrap();
+        assert_eq!(games.len(), 2);
+        let wd = games.iter().find(|g| g.entries[0].title == "Watch_Dogs").unwrap();
+        assert_eq!(wd.entries.len(), 1);
+        assert!(wd.entries[0].installed);
+        assert_eq!(wd.entries[0].platform_id, "541");
+        assert_eq!(wd.entries[0].cover_url.as_deref(), Some("https://ubiservices.cdn.ubi.com/c.jpg"));
+    }
+
+    fn scan_titles(p: Platform, inst: (&str, &str), owned: Vec<(&str, &str)>) -> Vec<crate::model::Game> {
+        let db = Db::open_in_memory().unwrap();
+        let provs = vec![fake(p, vec![entry(p, inst.0, inst.1, true)])];
+        let o: Vec<_> = owned.into_iter().map(|(i, t)| entry(p, i, t, false)).collect();
+        scan_all(&db, &provs, vec![(p, Ok(o))]).unwrap();
+        db.games().unwrap()
+    }
+
+    #[test]
+    fn title_fallback_not_for_steam() {
+        let g = scan_titles(
+            Platform::Steam,
+            ("489830", "The Elder Scrolls V: Skyrim Special Edition"),
+            vec![("72850", "The Elder Scrolls V: Skyrim")],
+        );
+        assert_eq!(g.len(), 2);
+    }
+
+    #[test]
+    fn title_fallback_requires_same_edition() {
+        let g = scan_titles(Platform::Ubisoft, ("541", "Watch_Dogs"), vec![("s1", "Watch_Dogs Complete Edition")]);
+        assert_eq!(g.len(), 2);
+    }
+
+    #[test]
+    fn title_fallback_ambiguous_owned_not_absorbed() {
+        let g = scan_titles(Platform::Ubisoft, ("541", "Watch_Dogs"), vec![("s1", "Watch_Dogs"), ("s2", "WATCH_DOGS™")]);
+        // Ambiguous: none absorbed by title, so three entries remain (grouped on one card).
+        let n: usize = g.iter().map(|x| x.entries.len()).sum();
+        assert_eq!(n, 3);
     }
 
     #[test]

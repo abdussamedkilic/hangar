@@ -7,6 +7,10 @@ pub mod epic_api;
 pub mod login;
 pub mod sanitize;
 pub mod store;
+pub mod ubi_probe;
+pub mod ubi_demux;
+pub mod ubisoft;
+pub mod ubisoft_api;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum AuthError {
@@ -22,12 +26,12 @@ pub enum AuthError {
 impl fmt::Display for AuthError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            AuthError::NotConnected => write!(f, "Epic bağlı değil"),
-            AuthError::Corrupt => write!(f, "Epic bağlantısı okunamadı"),
-            AuthError::InvalidGrant => write!(f, "Epic bağlantısının süresi doldu"),
+            AuthError::NotConnected => write!(f, "Hesap bağlı değil"),
+            AuthError::Corrupt => write!(f, "Bağlantı okunamadı"),
+            AuthError::InvalidGrant => write!(f, "Bağlantının süresi doldu"),
             AuthError::Save => write!(f, "Bağlantı kaydedilemedi"),
-            AuthError::Network(s) => write!(f, "Epic'e ulaşılamadı ({s})"),
-            AuthError::Parse(s) => write!(f, "Epic yanıtı anlaşılamadı ({s})"),
+            AuthError::Network(s) => write!(f, "Sunucuya ulaşılamadı ({s})"),
+            AuthError::Parse(s) => write!(f, "Yanıt anlaşılamadı ({s})"),
         }
     }
 }
@@ -56,6 +60,32 @@ impl fmt::Debug for StoredCred {
 impl Drop for StoredCred {
     fn drop(&mut self) {
         self.refresh_token.zeroize();
+    }
+}
+
+/// Ubisoft credential: only the long-lived remember-me ticket is persisted (tickets/sessions stay in memory).
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
+pub struct UbiCred {
+    pub v: u32,
+    pub remember_me_ticket: String,
+    pub user_id: String,
+    pub display_name: String,
+}
+
+impl fmt::Debug for UbiCred {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("UbiCred")
+            .field("v", &self.v)
+            .field("remember_me_ticket", &"***")
+            .field("user_id", &"***")
+            .field("display_name", &self.display_name)
+            .finish()
+    }
+}
+
+impl Drop for UbiCred {
+    fn drop(&mut self) {
+        self.remember_me_ticket.zeroize();
     }
 }
 

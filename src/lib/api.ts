@@ -55,6 +55,7 @@ export interface AccountStatus {
 export const api = {
   getLibrary: () => invoke<Game[]>("get_library"),
   rescan: () => invoke<ScanReport>("rescan"),
+  galaxyChangedSinceScan: () => invoke<boolean>("galaxy_changed_since_scan"),
   launch: (gameId: number, platform?: Platform, platformId?: string) => invoke<string>("launch", { gameId, platform, platformId }),
   setPreferred: (gameId: number, platform: Platform, platformId?: string) => invoke<void>("set_preferred", { gameId, platform, platformId }),
   setCover: (gameId: number, path: string) => invoke<string>("set_cover", { gameId, path }),
@@ -75,3 +76,6 @@ export const api = {
 };
 
 if (import.meta.env.DEV) (window as unknown as { hangarProbe: () => Promise<string> }).hangarProbe = () => invoke<string>("debug_epic_probe");
+if (import.meta.env.DEV) (window as unknown as { hangarUbiProbe: () => Promise<string> }).hangarUbiProbe = () => invoke<string>("debug_ubisoft_probe");
+if (import.meta.env.DEV) (window as unknown as { hangarUbiQuery: (body: string) => Promise<string> }).hangarUbiQuery = (body) => invoke<string>("debug_ubisoft_graphql", { body });
+if (import.meta.env.DEV) (window as unknown as { hangarUbiDemux: () => Promise<string> }).hangarUbiDemux = () => invoke<string>("debug_ubisoft_demux");

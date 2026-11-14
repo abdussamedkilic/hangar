@@ -1,4 +1,5 @@
 use hangar_core::accounts::epic::EpicClient;
+use hangar_core::accounts::ubisoft::UbiClient;
 use hangar_core::accounts::login::open_error;
 use hangar_core::artwork::ensure_cover;
 use hangar_core::db::Db;
@@ -29,6 +30,24 @@ pub struct CoverJob {
     rerun: AtomicBool,
     /// Game ids already tried without success this session (no repeated network attempts).
     failed: Mutex<std::collections::HashSet<i64>>,
+}
+
+/// Start time of the last finished scan (Galaxy edits made during a scan count as newer).
+#[derive(Default)]
+pub struct LastScan(Mutex<Option<std::time::SystemTime>>);
+
+/// True when the Galaxy DB was modified after the last scan (or no scan has completed yet).
+fn changed_since(mtime: Option<std::time::SystemTime>, last_scan: Option<std::time::SystemTime>) -> bool {
+    match (mtime, last_scan) {
+        (None, _) => false,
+        (Some(_), None) => true,
+        (Some(m), Some(l)) => m > l,
+    }
+}
+
+/// Latest of the two mtimes (Galaxy uses SQLite WAL: writes land in the `-wal` file first).
+fn latest_mtime(a: Option<std::time::SystemTime>, b: Option<std::time::SystemTime>) -> Option<std::time::SystemTime> {
+    a.max(b)
 }
 
 type Dbs<'a> = State<'a, Mutex<Db>>;
@@ -90,6 +109,11 @@ fn scan(app: &AppHandle) -> Result<ScanReport, String> {
                 owned.push((Platform::Epic, r));
             }
             extra.extend(epic_warn);
+            let (ubi, ubi_warn) = app.state::<UbiClient>().owned_for_scan(&epic_db);
+            if let Some(r) = ubi {
+                owned.push((Platform::Ubisoft, r));
+            }
+            extra.extend(ubi_warn);
         }
         // Without its own connection Epic is not refreshed; the last known list comes from the shared one.
         Err(_) => {
@@ -97,7 +121,10 @@ fn scan(app: &AppHandle) -> Result<ScanReport, String> {
             if let Ok(Some(v)) = g.owned_cache_get(Platform::Epic) {
                 owned.push((Platform::Epic, Ok(v)));
             }
-            extra.push("Epic oyunları güncellenemedi; son bilinen liste gösteriliyor.".to_string());
+            if let Ok(Some(v)) = g.owned_cache_get(Platform::Ubisoft) {
+                owned.push((Platform::Ubisoft, Ok(v)));
+            }
+            extra.push("Epic ve Ubisoft oyunları güncellenemedi; son bilinen liste gösteriliyor.".to_string());
         }
     }
     let mut providers: Vec<Box<dyn LibraryProvider>> = Vec::new();
@@ -180,9 +207,13 @@ fn fetch_covers(app: AppHandle) {
 
 async fn rescan_inner(app: AppHandle) -> Result<ScanReport, String> {
     let a = app.clone();
-    let report = tauri::async_runtime::spawn_blocking(move || scan(&a))
-        .await
-        .map_err(|e| e.to_string())??;
+    let started = std::time::SystemTime::now();
+    let result = tauri::async_runtime::spawn_blocking(move || scan(&a)).await;
+    // Recorded on failure too, so a persistent failure does not retrigger a scan on every focus.
+    if let Ok(mut l) = app.state::<LastScan>().0.lock() {
+        *l = Some(started);
+    }
+    let report = result.map_err(|e| e.to_string())??;
     fetch_covers(app);
     Ok(report)
 }
@@ -190,6 +221,15 @@ async fn rescan_inner(app: AppHandle) -> Result<ScanReport, String> {
 #[tauri::command]
 pub fn get_library(db: Dbs) -> Result<Vec<Game>, String> {
     lock(&db)?.games().map_err(dberr)
+}
+
+#[tauri::command]
+pub fn galaxy_changed_since_scan(last: State<LastScan>) -> bool {
+    let db = hangar_core::providers::gog::GALAXY_DB;
+    let m = |p: &str| std::fs::metadata(p).and_then(|m| m.modified()).ok();
+    let mtime = latest_mtime(m(db), m(&format!("{db}-wal")));
+    let last_scan = last.0.lock().ok().and_then(|l| *l);
+    changed_since(mtime, last_scan)
 }
 
 #[tauri::command]
@@ -444,4 +484,33 @@ pub async fn add_local_games(app: AppHandle, items: Vec<Candidate>) -> Result<Sc
         .collect::<Result<Vec<_>, _>>()?;
     lock(&app.state::<Mutex<Db>>())?.add_local_games(&cleaned, "scan").map_err(dberr)?;
     rescan_inner(app).await
+}
+
+#[cfg(test)]
+mod galaxy_tests {
+    use super::{changed_since, latest_mtime};
+    use std::time::{Duration, SystemTime};
+
+    #[test]
+    fn latest_mtime_cases() {
+        let t = SystemTime::UNIX_EPOCH + Duration::from_secs(1000);
+        let later = t + Duration::from_secs(5);
+        assert_eq!(latest_mtime(Some(t), Some(later)), Some(later));
+        assert_eq!(latest_mtime(Some(later), Some(t)), Some(later));
+        assert_eq!(latest_mtime(Some(t), None), Some(t));
+        assert_eq!(latest_mtime(None, Some(t)), Some(t));
+        assert_eq!(latest_mtime(None, None), None);
+    }
+
+    #[test]
+    fn changed_since_cases() {
+        let t = SystemTime::UNIX_EPOCH + Duration::from_secs(1000);
+        let later = t + Duration::from_secs(5);
+        assert!(!changed_since(None, Some(t)));
+        assert!(!changed_since(None, None));
+        assert!(changed_since(Some(t), None));
+        assert!(changed_since(Some(later), Some(t)));
+        assert!(!changed_since(Some(t), Some(later)));
+        assert!(!changed_since(Some(t), Some(t)));
+    }
 }

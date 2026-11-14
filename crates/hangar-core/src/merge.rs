@@ -9,7 +9,7 @@ pub struct Override {
     pub merged: bool,
 }
 
-const SUFFIXES: [&str; 13] = [
+const SUFFIXES: [&str; 14] = [
     "ultimate edition",
     "definitive edition",
     "game of the year edition",
@@ -23,6 +23,7 @@ const SUFFIXES: [&str; 13] = [
     "gold edition",
     "anniversary edition",
     "amazon prime",
+    "amazon luna",
 ];
 
 fn clean(s: &str) -> String {
@@ -108,7 +109,13 @@ fn edition_label(suffix: &str) -> Option<&'static str> {
 /// Edition label (first dropped edition suffix, else "Orijinal") and copy marker (Prime).
 pub fn edition_of(title: &str) -> Edition {
     let dropped = strip_suffixes(title).1;
-    let copy = dropped.contains(&"amazon prime").then(|| "Prime".to_string());
+    let copy = if dropped.contains(&"amazon prime") {
+        Some("Prime".to_string())
+    } else if dropped.contains(&"amazon luna") {
+        Some("Amazon".to_string())
+    } else {
+        None
+    };
     let label = dropped
         .iter()
         .find_map(|s| edition_label(s))
@@ -135,6 +142,17 @@ pub fn display_base(title: &str) -> String {
     title.trim().to_string()
 }
 
+/// Card key of one title: normalized title, plus `|edition` unless Original (what `group` uses).
+pub fn card_key(title: &str) -> String {
+    let n = normalize(title);
+    let ed = edition_of(title);
+    if ed.label == "Orijinal" {
+        n
+    } else {
+        format!("{n}|{}", ed.label)
+    }
+}
+
 /// Groups entries by group key (normalized title, plus `|edition` unless Original). Overrides are order-independent: all `merged=true` overrides
 /// are unioned first (set key = lowest member norm), then `merged=false` splits are evaluated
 /// against that snapshot; a split moves only `b` (to key `<norm_b>#<platform>:<id>`).
@@ -142,21 +160,9 @@ pub fn group(
     entries: Vec<PlatformEntry>,
     overrides: &[Override],
 ) -> Vec<(String, Vec<PlatformEntry>)> {
-    let editions: Vec<Edition> = entries.iter().map(|e| edition_of(&e.title)).collect();
     // Group key: one card = one build. Remastered, Complete Edition, ... are separate cards; the
     // Original keeps the plain normalized title (so existing games rows survive).
-    let norms: Vec<String> = entries
-        .iter()
-        .zip(&editions)
-        .map(|(e, ed)| {
-            let n = normalize(&e.title);
-            if ed.label == "Orijinal" {
-                n
-            } else {
-                format!("{n}|{}", ed.label)
-            }
-        })
-        .collect();
+    let norms: Vec<String> = entries.iter().map(|e| card_key(&e.title)).collect();
     // Local entries are never auto-merged: they keep their own key. Same-store copies share a card.
     let dup: Vec<bool> = entries.iter().map(|e| e.platform == Platform::Local).collect();
     let eff: Vec<String> = (0..entries.len())
@@ -436,6 +442,15 @@ mod tests {
     }
 
     #[test]
+    fn amazon_luna_is_a_copy() {
+        assert_eq!(edition_of("Warbreeds - Amazon Luna"), Edition { label: "Orijinal".into(), copy: Some("Amazon".into()) });
+        assert_eq!(normalize("Warbreeds - Amazon Luna"), normalize("WarBreeds"));
+        assert_eq!(display_base("Warbreeds - Amazon Luna"), "Warbreeds");
+        let g = group(vec![e(Platform::Gog, "1", "WarBreeds"), e(Platform::Gog, "2", "Warbreeds - Amazon Luna")], &[]);
+        assert_eq!(g.len(), 1);
+    }
+
+    #[test]
     fn display_base_cases() {
         assert_eq!(display_base("BioShock™ Remastered - Amazon Prime"), "BioShock");
         assert_eq!(display_base("BioShock Infinite: Complete Edition"), "BioShock Infinite");
@@ -491,7 +506,7 @@ mod tests {
 
     #[test]
     fn every_edition_suffix_is_its_own_card() {
-        for s in SUFFIXES.iter().filter(|s| **s != "amazon prime") {
+        for s in SUFFIXES.iter().filter(|s| !s.starts_with("amazon ")) {
             let title = format!("Foo {s}");
             assert_ne!(edition_of(&title).label, "Orijinal", "{s}");
             let g = group(vec![e(Platform::Steam, "1", "Foo"), e(Platform::Epic, "x", &title)], &[]);

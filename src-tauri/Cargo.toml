@@ -13,3 +13,4 @@ serde_json = "1"
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
 hangar-core = { path = "../crates/hangar-core" }
+zeroize = "1"

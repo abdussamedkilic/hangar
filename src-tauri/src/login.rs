@@ -2,7 +2,7 @@
 //! Kodu, token'ları ya da sorgulu URL'leri asla loglamaz.
 
 use hangar_core::accounts::epic_api::LOGIN_URL;
-use hangar_core::accounts::login::{decide, init_script, new_nonce, window_title, NavDecision};
+use hangar_core::accounts::login::{decide_with, init_script, new_nonce, window_title, NavDecision, NAV_RULES};
 use std::collections::BTreeSet;
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::Duration;
@@ -43,6 +43,27 @@ pub async fn login(app: &AppHandle) -> Result<String, LoginError> {
 }
 
 pub async fn login_with_hosts(app: &AppHandle) -> Result<LoginOutcome, LoginError> {
+    login_flow(app, LOGIN_URL.to_string(), NAV_RULES, init_script, window_title).await
+}
+
+/// Üretim Ubisoft girişi: sağlayıcıya özgü adres, kurallar, betik ve başlık.
+pub async fn login_ubisoft(app: &AppHandle) -> Result<String, LoginError> {
+    use hangar_core::accounts::login::{ubi_init_script, ubi_login_url, ubi_window_title, UBI_NAV_RULES};
+    login_flow(app, ubi_login_url(), UBI_NAV_RULES, ubi_init_script, ubi_window_title)
+        .await
+        .map(|o| o.code)
+}
+
+type Rules = &'static [(&'static str, bool, &'static [&'static str])];
+
+/// Sağlayıcıdan bağımsız giriş akışı: adres, gezinme kuralları, nonce'lu betik ve başlık sağlayıcıya özgü.
+pub async fn login_flow(
+    app: &AppHandle,
+    url: String,
+    rules: Rules,
+    script: fn(&str) -> String,
+    title: fn(&tauri::Url) -> String,
+) -> Result<LoginOutcome, LoginError> {
     if let Some(w) = app.get_webview_window(LABEL) {
         let _ = w.set_focus();
         return Err(LoginError::AlreadyOpen);
@@ -58,15 +79,15 @@ pub async fn login_with_hosts(app: &AppHandle) -> Result<LoginOutcome, LoginErro
     let (nonce_nav, app_nav, allowed_nav, blocked_nav) = (nonce.clone(), app.clone(), allowed.clone(), blocked.clone());
     let (nonce_nw, app_nw) = (nonce.clone(), app.clone());
 
-    let login_url: tauri::Url = LOGIN_URL.parse().expect("LOGIN_URL");
+    let login_url: tauri::Url = url.parse().expect("login url");
     let window = WebviewWindowBuilder::new(app, LABEL, WebviewUrl::External(login_url.clone()))
-        .title(window_title(&login_url))
+        .title(title(&login_url))
         .incognito(true)
-        .initialization_script(init_script(&nonce))
+        .initialization_script(script(&nonce))
         .inner_size(520.0, 760.0)
         .on_navigation(move |url| {
             let host = url.host_str().unwrap_or("").to_string();
-            match decide(url, &nonce_nav) {
+            match decide_with(url, &nonce_nav, rules) {
                 // Geri dönüş yalnızca bu pencere açıkken kabul edilir; ilk mesaj kazanır
                 // (alıcı ilk mesajdan sonra okunmaz, sonraki gönderimler yok sayılır).
                 NavDecision::Callback(c) => {
@@ -77,7 +98,7 @@ pub async fn login_with_hosts(app: &AppHandle) -> Result<LoginOutcome, LoginErro
                     if let Ok(mut s) = allowed_nav.lock() {
                         s.insert(host);
                     }
-                    let (app, title) = (app_nav.clone(), window_title(url));
+                    let (app, title) = (app_nav.clone(), title(url));
                     tauri::async_runtime::spawn(async move {
                         if let Some(w) = app.get_webview_window(LABEL) {
                             let _ = w.set_title(&title);
@@ -94,7 +115,7 @@ pub async fn login_with_hosts(app: &AppHandle) -> Result<LoginOutcome, LoginErro
             }
         })
         .on_new_window(move |url, _features| {
-            if decide(&url, &nonce_nw) == NavDecision::Allow {
+            if decide_with(&url, &nonce_nw, rules) == NavDecision::Allow {
                 let app = app_nw.clone();
                 tauri::async_runtime::spawn(async move {
                     if let Some(w) = app.get_webview_window(LABEL) {
@@ -213,6 +234,69 @@ pub async fn debug_epic_probe(app: AppHandle) -> Result<String, String> {
     Ok(format!(
         "{n} dosya yazıldı: {}\nizinli hostlar: {}\nengellenen hostlar: {}",
         dir2.display(),
+        hosts.0.iter().cloned().collect::<Vec<_>>().join(", "),
+        hosts.1.iter().cloned().collect::<Vec<_>>().join(", "),
+    ))
+}
+
+/// U0 keşfi (Ubisoft): giriş → sahip olunan oyunlar, `Game` alanları, yenileme durumu, yerel önbellek dosya adları.
+#[cfg(debug_assertions)]
+#[tauri::command]
+pub async fn debug_ubisoft_probe(app: AppHandle) -> Result<String, String> {
+    use hangar_core::accounts::login::{ubi_init_script, ubi_login_url, ubi_window_title, UBI_NAV_RULES};
+    use hangar_core::accounts::sanitize::sanitize;
+    use hangar_core::accounts::ubi_probe as ubi;
+
+    let outcome = login_flow(&app, ubi_login_url(), UBI_NAV_RULES, ubi_init_script, ubi_window_title)
+        .await
+        .map_err(|e| e.to_string())?;
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?.join("u0");
+    let hosts = (outcome.allowed_hosts, outcome.blocked_hosts);
+    let code = outcome.code;
+
+    let summary = tauri::async_runtime::spawn_blocking(move || -> Result<String, String> {
+        std::fs::create_dir_all(&dir).map_err(|e| format!("klasör oluşturulamadı: {e}"))?;
+        let login = ubi::parse_login(&code)?;
+        let secrets: Vec<&str> = login.secrets.iter().map(String::as_str).collect();
+        let write = |file: &str, body: &str| -> Result<(), String> {
+            let c = sanitize(body, &secrets).map_err(|_| "temizleme başarısız, dosya yazılmadı".to_string())?;
+            std::fs::write(dir.join(file), c).map_err(|e| format!("yazılamadı: {e}"))
+        };
+        let mut lines: Vec<String> = Vec::new();
+
+        match ubi::graphql(&login, &ubi::owned_games_body()) {
+            Ok(b) => {
+                write("ubi-owned.json", &b)?;
+                let (all, pc) = ubi::count_owned(&b);
+                lines.push(format!("sahip olunan: {all}, PC: {pc}"));
+            }
+            Err(e) => lines.push(format!("AllGames hatası: {e}")),
+        }
+        match ubi::graphql(&login, &ubi::game_fields_body()) {
+            Ok(b) => {
+                write("ubi-game-fields.json", &b)?;
+                lines.push(format!("Game alanları: {}", ubi::field_names(&b).join(", ")));
+            }
+            Err(e) => lines.push(format!("introspection hatası: {e}")),
+        }
+        let status = ubi::refresh_status(&login);
+        write("ubi-refresh-status.txt", &status)?;
+        lines.push(format!("yenileme: {status}"));
+
+        let mut dirs = vec![std::path::PathBuf::from(r"C:\Program Files (x86)\Ubisoft\Ubisoft Game Launcher\cache\configuration")];
+        if let Ok(la) = std::env::var("LOCALAPPDATA") {
+            dirs.insert(0, std::path::Path::new(&la).join(r"Ubisoft Game Launcher\cache\configuration"));
+        }
+        for d in dirs {
+            lines.push(ubi::list_dir(&d));
+        }
+        Ok(lines.join("\n"))
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+
+    Ok(format!(
+        "{summary}\nizinli hostlar: {}\nengellenen hostlar: {}",
         hosts.0.iter().cloned().collect::<Vec<_>>().join(", "),
         hosts.1.iter().cloned().collect::<Vec<_>>().join(", "),
     ))

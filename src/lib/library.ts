@@ -8,7 +8,7 @@ const PLATFORMS: Platform[] = ["steam", "epic", "ubisoft", "gog", "riot", "local
 const SUFFIXES = [
   "ultimate edition", "definitive edition", "game of the year edition", "goty",
   "deluxe edition", "complete edition", "remastered", "director's cut",
-  "enhanced edition", "special edition", "gold edition", "anniversary edition", "amazon prime",
+  "enhanced edition", "special edition", "gold edition", "anniversary edition", "amazon prime", "amazon luna",
 ];
 const TR: Record<string, string> = { "ı": "i", "ş": "s", "ğ": "g", "ü": "u", "ö": "o", "ç": "c" };
 

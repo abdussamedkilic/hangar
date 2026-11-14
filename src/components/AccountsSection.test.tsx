@@ -49,6 +49,7 @@ test("disconnect asks first", async () => {
   render(<AccountsSection onChanged={onChanged} />);
   fireEvent.click(await screen.findByRole("button", { name: "Bağlantıyı kes" }));
   await waitFor(() => expect(ask).toHaveBeenCalledTimes(1));
+  expect(ask).toHaveBeenCalledWith("Epic bağlantısı silinecek ve Epic'teki oturum kapatılacak; kurulu oyunlar kalır.", expect.anything());
   expect(api.disconnectAccount).not.toHaveBeenCalled();
   vi.mocked(ask).mockResolvedValueOnce(true);
   vi.mocked(api.disconnectAccount).mockResolvedValue(true);
@@ -84,4 +85,42 @@ test("expired can also disconnect after asking", async () => {
   expect(ask).toHaveBeenCalledTimes(1);
   expect(api.disconnectAccount).toHaveBeenCalledWith("epic");
   expect(api.connectAccount).not.toHaveBeenCalled();
+});
+
+const ubiDisc = { platform: "ubisoft" as const, state: "disconnected" as const, display_name: null };
+const ubiConn = { platform: "ubisoft" as const, state: "connected" as const, display_name: "ubioyuncu" };
+
+test("renders a row per account", async () => {
+  vi.mocked(api.getAccounts).mockResolvedValue([disc, ubiDisc]);
+  render(<AccountsSection onChanged={vi.fn()} />);
+  expect(await screen.findByText("Epic Games")).toBeInTheDocument();
+  expect(screen.getByText("Ubisoft Connect")).toBeInTheDocument();
+  expect(screen.getAllByRole("button", { name: "Bağlan" })).toHaveLength(2);
+  expect(screen.getByText("Giriş Ubisoft'un kendi sayfasında yapılır; Hangar şifreni görmez.")).toBeInTheDocument();
+  expect(screen.getByText("Giriş Epic'in kendi sayfasında yapılır; Hangar şifreni görmez.")).toBeInTheDocument();
+});
+
+test("connects ubisoft only", async () => {
+  vi.mocked(api.getAccounts).mockResolvedValue([disc, ubiDisc]);
+  vi.mocked(api.connectAccount).mockResolvedValue(ubiConn);
+  const onChanged = vi.fn().mockResolvedValue(undefined);
+  render(<AccountsSection onChanged={onChanged} />);
+  const buttons = await screen.findAllByRole("button", { name: "Bağlan" });
+  fireEvent.click(buttons[1]);
+  await waitFor(() => expect(onChanged).toHaveBeenCalledWith("Ubisoft oyunları yükleniyor…"));
+  expect(api.connectAccount).toHaveBeenCalledWith("ubisoft");
+  expect(await screen.findByText("Bağlı · ubioyuncu")).toBeInTheDocument();
+  expect(screen.getAllByRole("button", { name: "Bağlan" })).toHaveLength(1);
+});
+
+test("disconnects ubisoft with its own confirm text", async () => {
+  vi.mocked(api.getAccounts).mockResolvedValue([disc, ubiConn]);
+  vi.mocked(ask).mockResolvedValueOnce(true);
+  vi.mocked(api.disconnectAccount).mockResolvedValue(true);
+  const onChanged = vi.fn().mockResolvedValue(undefined);
+  render(<AccountsSection onChanged={onChanged} />);
+  fireEvent.click(await screen.findByRole("button", { name: "Bağlantıyı kes" }));
+  await waitFor(() => expect(onChanged).toHaveBeenCalledWith());
+  expect(ask).toHaveBeenCalledWith("Ubisoft bağlantısı silinecek ve Ubisoft'taki oturum kapatılacak; kurulu oyunlar kalır.", expect.anything());
+  expect(api.disconnectAccount).toHaveBeenCalledWith("ubisoft");
 });
