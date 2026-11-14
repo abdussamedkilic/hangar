@@ -83,7 +83,7 @@ export default function GameGrid({ games, selectedId, onSelect, nudge, onNudge, 
                 <GameCard key={g.id} game={g} selected={g.id === selectedId} onSelect={() => onSelect(g.id)} onContext={(x, y) => onContext?.(g, x, y)} />
               ) : (
                 <button key="nudge" className="card nudge" onClick={onNudge}>
-                  <span className="nudge-box">Kurulu olmayan Steam oyunlarını görmek için API anahtarı ekle</span>
+                  <span className="nudge-box">Steam'e bağlan</span>
                 </button>
               ),
             )}

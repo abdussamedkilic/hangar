@@ -159,9 +159,17 @@ pub struct GogProvider {
     records: Vec<GogRecord>,
     galaxy: Option<PathBuf>,
     owned: Vec<PlatformEntry>,
+    owned_from_db: bool,
 }
 
 impl GogProvider {
+    /// `false` skips the owned-but-not-installed entries read from the Galaxy DB
+    /// (the GOG account supplies them instead).
+    pub fn with_owned_from_db(mut self, on: bool) -> Self {
+        self.owned_from_db = on;
+        self
+    }
+
     #[cfg(windows)]
     pub fn detect() -> Option<Self> {
         use winreg::{enums::HKEY_LOCAL_MACHINE, RegKey};
@@ -191,7 +199,7 @@ impl GogProvider {
             .and_then(|p| p.get_value::<String, _>("client").ok())
             .map(PathBuf::from)
             .filter(|p| p.to_str().is_some_and(is_local_abs) && p.join("GalaxyClient.exe").is_file());
-        Some(Self { records, galaxy, owned })
+        Some(Self { records, galaxy, owned, owned_from_db: true })
     }
 
     #[cfg(not(windows))]
@@ -215,7 +223,8 @@ impl LibraryProvider for GogProvider {
             .iter()
             .map(|r| GogRecord { game_id: r.game_id.clone(), name: r.name.clone(), path: r.path.clone(), exe: r.exe.clone() })
             .collect();
-        Ok(combine(entries_from(records, self.galaxy.as_deref()), self.owned.clone()))
+        let owned = if self.owned_from_db { self.owned.clone() } else { vec![] };
+        Ok(combine(entries_from(records, self.galaxy.as_deref()), owned))
     }
 }
 
@@ -321,6 +330,21 @@ mod tests {
         let got = owned_from_path(&p);
         let _ = std::fs::remove_file(&p);
         assert!(got.is_empty());
+    }
+
+    #[test]
+    fn owned_from_db_off_drops_uninstalled_galaxy_entries() {
+        let owned = owned_from_galaxy_db(&galaxy_db()).unwrap();
+        let mk = |on: bool| {
+            GogProvider { records: vec![rec("2", "Hades", r"D:/G/a.exe")], galaxy: None, owned: owned.clone(), owned_from_db: true }
+                .with_owned_from_db(on)
+                .scan()
+                .unwrap()
+        };
+        assert_eq!(mk(true).len(), 2); // installed 2 + owned-only 1
+        let off = mk(false);
+        assert_eq!(off.len(), 1);
+        assert_eq!(off[0].platform_id, "2");
     }
 
     #[test]

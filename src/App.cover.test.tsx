@@ -20,7 +20,7 @@ vi.mock("./components/GameGrid", () => ({
 vi.mock("./state/useLibrary", () => ({
   useLibrary: () => ({
     games: [{ id: 7, title: "Hades", norm_title: "hades", cover_path: null, preferred: null, last_launched: null, entries: [{ platform: "local", platform_id: "1", title: "Hades", installed: true, install_path: null, size_bytes: null, last_played: null, playtime_min: null, launch_uri: "C:\\H.exe", install_uri: null }] }],
-    selectedId: 7, select: vi.fn(), tab: { kind: "all" }, setTab: vi.fn(), installedOnly: false, setInstalledOnly: vi.fn(), collections: [], reloadCollections: vi.fn(), query: "", setQuery: vi.fn(),
+    selectedId: 7, select: vi.fn(), tab: { kind: "all" }, setTab: vi.fn(), filter: { kind: "none" }, setFilter: vi.fn(), savedFilters: [], reloadFilters: vi.fn(), collections: [], reloadCollections: vi.fn(), query: "", setQuery: vi.fn(),
     sort: "recent", setSort: vi.fn(), warnings: [], rescanning: false, loaded: true, rescan: vi.fn(), applyReport: vi.fn(),
   }),
 }));

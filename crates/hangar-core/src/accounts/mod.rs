@@ -4,8 +4,11 @@ use zeroize::Zeroize;
 
 pub mod epic;
 pub mod epic_api;
+pub mod gog;
+pub mod gog_api;
 pub mod login;
 pub mod sanitize;
+pub mod steam;
 pub mod store;
 pub mod ubi_probe;
 pub mod ubi_demux;
@@ -60,6 +63,56 @@ impl fmt::Debug for StoredCred {
 impl Drop for StoredCred {
     fn drop(&mut self) {
         self.refresh_token.zeroize();
+    }
+}
+
+/// GOG credential: the Galaxy refresh token (access tokens stay in memory).
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
+pub struct GogCred {
+    pub v: u32,
+    pub refresh_token: String,
+    pub user_id: String,
+    pub display_name: String,
+}
+
+impl fmt::Debug for GogCred {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("GogCred")
+            .field("v", &self.v)
+            .field("refresh_token", &"***")
+            .field("user_id", &"***")
+            .field("display_name", &self.display_name)
+            .finish()
+    }
+}
+
+impl Drop for GogCred {
+    fn drop(&mut self) {
+        self.refresh_token.zeroize();
+    }
+}
+
+/// Steam credential: only the account identity (the web session lives in the persistent webview profile).
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
+pub struct SteamCred {
+    pub v: u32,
+    pub steamid: String,
+    pub display_name: String,
+}
+
+impl fmt::Debug for SteamCred {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SteamCred")
+            .field("v", &self.v)
+            .field("steamid", &"***")
+            .field("display_name", &self.display_name)
+            .finish()
+    }
+}
+
+impl Drop for SteamCred {
+    fn drop(&mut self) {
+        self.steamid.zeroize();
     }
 }
 

@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { vi } from "vitest";
 import GameCard from "./GameCard";
 import type { Game, Platform } from "../lib/api";
@@ -31,4 +31,16 @@ test("badge span keeps title but has no aria-label", () => {
   const pg = container.querySelector(".pg")!;
   expect(pg).toHaveAttribute("title");
   expect(pg).not.toHaveAttribute("aria-label");
+});
+
+test("dragstart puts the game id in dataTransfer; click still selects", () => {
+  const onSelect = vi.fn();
+  render(<GameCard game={{ ...card([entry("steam", "1")]), id: 42 }} selected={false} onSelect={onSelect} />);
+  const btn = screen.getByRole("button");
+  expect(btn).toHaveAttribute("draggable", "true");
+  const setData = vi.fn();
+  fireEvent.dragStart(btn, { dataTransfer: { setData, effectAllowed: "" } });
+  expect(setData).toHaveBeenCalledWith("application/x-hangar-game", "42");
+  fireEvent.click(btn);
+  expect(onSelect).toHaveBeenCalled();
 });

@@ -7,7 +7,7 @@ const h = vi.hoisted(() => ({ setTab: vi.fn(), games: [] as unknown[], installed
 vi.mock("./lib/api", () => ({ api: { getSettings: vi.fn().mockResolvedValue({ steam_api_key: "k", steam_id: null }), getScanFolders: vi.fn().mockResolvedValue([]) } }));
 vi.mock("./state/useLibrary", () => ({
   useLibrary: () => ({
-    games: h.games, selectedId: null, select: vi.fn(), tab: { kind: "platform", platform: "ubisoft" }, setTab: h.setTab, installedOnly: h.installedOnly, setInstalledOnly: vi.fn(),
+    games: h.games, selectedId: null, select: vi.fn(), tab: { kind: "platform", platform: "ubisoft" }, setTab: h.setTab, filter: h.installedOnly ? { kind: "installed" } : { kind: "none" }, setFilter: vi.fn(), savedFilters: [], reloadFilters: vi.fn(),
     collections: [], reloadCollections: vi.fn(), query: "", setQuery: vi.fn(), sort: "recent", setSort: vi.fn(), warnings: [], rescanning: false, loaded: true, rescan: vi.fn(), applyReport: vi.fn(),
   }),
 }));

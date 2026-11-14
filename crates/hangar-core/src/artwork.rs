@@ -39,7 +39,13 @@ pub fn is_allowed_cover_url(url: &str) -> bool {
     }
     let host = u.host_str().unwrap_or("");
     let sub = |d: &str| host.ends_with(&format!(".{d}"));
+    // GOG image shards: images-1 .. images-9.gog-statics.com
+    let gog_shard = host
+        .strip_prefix("images-")
+        .and_then(|r| r.strip_suffix(".gog-statics.com"))
+        .is_some_and(|d| matches!(d.as_bytes(), [b'1'..=b'9']));
     sub("epicgames.com")
+        || gog_shard
         || sub("unrealengine.com")
         || sub("steamstatic.com")
         || ["images.gog.com", "images.gog-statics.com", "api.gog.com", "steamcdn-a.akamaihd.net", "ubiservices.cdn.ubi.com", "ubistatic3-a.akamaihd.net"].contains(&host)
@@ -597,6 +603,8 @@ mod tests {
         for ok in [
             "https://images.gog.com/a_glx_vertical_cover.webp?namespace=gamesdb",
             "https://images.gog-statics.com/a.jpg",
+            "https://images-3.gog-statics.com/346e_392.jpg",
+            "https://images-1.gog-statics.com/346e_392.jpg",
             "https://api.gog.com/v2/games/1",
             "https://cdn1.epicgames.com/a.jpg",
             "https://cdn2.unrealengine.com/x.jpg",
@@ -618,6 +626,12 @@ mod tests {
             "https://evil-unrealengine.com/x.jpg",
             "https://unrealengine.com/x.jpg",
             "https://127.0.0.1/a.jpg",
+            "https://images-x.evil.com/a.jpg",
+            "https://images-3.evil.com/a.jpg",
+            "https://images-0.gog-statics.com/a.jpg",
+            "https://images-10.gog-statics.com/a.jpg",
+            "https://images-3.gog-statics.com.evil.io/a.jpg",
+            "https://images-3.gog-statics.com:8443/a.jpg",
             "https://evil.ubiservices.cdn.ubi.com.io/a.jpg",
             "http://ubiservices.cdn.ubi.com/a.jpg",
             "http://ubistatic3-a.akamaihd.net/a.jpg",

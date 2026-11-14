@@ -1,0 +1,21 @@
+{
+ "page": 1,
+ "totalPages": 1,
+ "totalProducts": 2,
+ "products": [
+  {
+   "id": 2099051765,
+   "title": "9 Years of Shadows",
+   "image": "//images-3.gog-statics.com/346e28f68ac65fd83a31c81d3a99cbf272c23f5f61be330ef413664761fff26c",
+   "isGame": true,
+   "slug": "9_years_of_shadows"
+  },
+  {
+   "id": 1901367087,
+   "title": "A Plague Tale: Innocence",
+   "image": "//images-1.gog-statics.com/3987d42ccbd6c61f8a4881f3f48e40913f75e0254ed794653f6b8972d964b6dc",
+   "isGame": true,
+   "slug": "a_plague_tale_innocence"
+  }
+ ]
+}

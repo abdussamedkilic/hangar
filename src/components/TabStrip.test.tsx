@@ -65,3 +65,32 @@ test("presence keeps a store tab whose installed-aware count is 0", () => {
   setup({ counts: inst, presence: counts, installedOnly: true });
   expect(screen.getByRole("tab", { name: "Ubisoft 0" })).toBeInTheDocument();
 });
+
+const MIME = "application/x-hangar-game";
+const dt = (data: Record<string, string>) => ({ types: Object.keys(data), getData: (k: string) => data[k] ?? "", dropEffect: "none" });
+
+test("dropping a game onto a collection tab calls onDropGame; store tab ignores it", () => {
+  const onDropGame = vi.fn();
+  setup({ collections: [{ id: 7, name: "Favoriler", entries: [] }], onDropGame });
+  const col = screen.getByRole("tab", { name: /Favoriler/ });
+  fireEvent.dragOver(col, { dataTransfer: dt({ [MIME]: "42" }) });
+  expect(col).toHaveClass("drop-ok");
+  fireEvent.drop(col, { dataTransfer: dt({ [MIME]: "42" }) });
+  expect(onDropGame).toHaveBeenCalledWith(7, 42);
+  expect(col).not.toHaveClass("drop-ok");
+  const store = screen.getByRole("tab", { name: /Steam/ });
+  fireEvent.dragOver(store, { dataTransfer: dt({ [MIME]: "42" }) });
+  fireEvent.drop(store, { dataTransfer: dt({ [MIME]: "42" }) });
+  expect(onDropGame).toHaveBeenCalledTimes(1);
+  expect(store).not.toHaveClass("drop-ok");
+});
+
+test("foreign drag types are not accepted on collection tabs", () => {
+  const onDropGame = vi.fn();
+  setup({ collections: [{ id: 7, name: "Favoriler", entries: [] }], onDropGame });
+  const col = screen.getByRole("tab", { name: /Favoriler/ });
+  fireEvent.dragOver(col, { dataTransfer: dt({ "text/plain": "42" }) });
+  fireEvent.drop(col, { dataTransfer: dt({ "text/plain": "42" }) });
+  expect(col).not.toHaveClass("drop-ok");
+  expect(onDropGame).not.toHaveBeenCalled();
+});

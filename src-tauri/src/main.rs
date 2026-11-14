@@ -4,9 +4,13 @@ mod accounts;
 mod collections;
 mod commands;
 mod login;
+mod steam_scan;
 
 use hangar_core::accounts::epic::EpicClient;
 use hangar_core::accounts::epic_api::HttpEpicApi;
+use hangar_core::accounts::gog::GogClient;
+use hangar_core::accounts::gog_api::HttpGogApi;
+use hangar_core::accounts::steam::SteamAccount;
 use hangar_core::accounts::ubisoft::UbiClient;
 use hangar_core::accounts::ubisoft_api::HttpUbiApi;
 use hangar_core::accounts::store::SecretStore;
@@ -34,6 +38,8 @@ fn main() {
                 { Box::new(hangar_core::accounts::store::MemoryStore::default()) }
             };
             app.manage(EpicClient::new(Box::new(HttpEpicApi), new_store()));
+            app.manage(GogClient::new(Box::new(HttpGogApi), new_store()));
+            app.manage(SteamAccount::new(new_store()));
             app.manage(UbiClient::new(Box::new(HttpUbiApi), new_store()));
             Ok(())
         })
@@ -64,6 +70,14 @@ fn main() {
             accounts::get_accounts,
             accounts::connect_account,
             accounts::disconnect_account,
+            collections::get_filters,
+            collections::create_filter,
+            collections::update_filter,
+            collections::delete_filter,
+            accounts::get_gog_source,
+            accounts::set_gog_source,
+            commands::get_steam_advanced,
+            commands::set_steam_advanced,
             collections::get_collections,
             collections::create_collection,
             collections::rename_collection,
@@ -97,6 +111,14 @@ fn main() {
             accounts::get_accounts,
             accounts::connect_account,
             accounts::disconnect_account,
+            collections::get_filters,
+            collections::create_filter,
+            collections::update_filter,
+            collections::delete_filter,
+            accounts::get_gog_source,
+            accounts::set_gog_source,
+            commands::get_steam_advanced,
+            commands::set_steam_advanced,
             collections::get_collections,
             collections::create_collection,
             collections::rename_collection,

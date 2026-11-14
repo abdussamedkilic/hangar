@@ -18,6 +18,7 @@ interface Props {
   onRename?: (id: number, name: string) => Promise<void>;
   onRenameCancel?: () => void;
   onTabContext: (c: Collection, x: number, y: number) => void;
+  onDropGame?: (collectionId: number, gameId: number) => void;
   viewMode?: "grid" | "list";
   onViewMode?: (m: "grid" | "list") => void;
 }
@@ -48,10 +49,20 @@ const same = (a: Tab, b: Tab) =>
   a.kind === b.kind &&
   (a.kind === "all" || (a.kind === "platform" && b.kind === "platform" && a.platform === b.platform) || (a.kind === "collection" && b.kind === "collection" && a.id === b.id));
 
-export default function TabStrip({ tab, counts, presence = counts, collections, installedOnly, renamingId = null, onTab, onClearInstalled, onCreate, onRename, onRenameCancel, onTabContext, viewMode, onViewMode }: Props) {
+const GAME_MIME = "application/x-hangar-game";
+/** Accepts only Hangar game drags; marks the drop as allowed. */
+const accept = (e: React.DragEvent) => {
+  if (!Array.from(e.dataTransfer.types).includes(GAME_MIME)) return false;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = "copy";
+  return true;
+};
+
+export default function TabStrip({ tab, counts, presence = counts, collections, installedOnly, renamingId = null, onTab, onClearInstalled, onCreate, onRename, onRenameCancel, onTabContext, onDropGame, viewMode, onViewMode }: Props) {
   const [adding, setAdding] = useState(false);
-  const btn = (key: string, t: Tab, label: string, n: number, extra?: { onContextMenu: (e: React.MouseEvent) => void }) => (
-    <button key={key} role="tab" aria-selected={same(t, tab)} className={same(t, tab) ? "tab on" : "tab"} onClick={() => onTab(t)} {...extra}>
+  const [overId, setOverId] = useState<number | null>(null);
+  const btn = (key: string, t: Tab, label: string, n: number, extra?: React.ButtonHTMLAttributes<HTMLButtonElement> & { drop?: boolean }) => (
+    <button key={key} role="tab" aria-selected={same(t, tab)} className={(same(t, tab) ? "tab on" : "tab") + (extra?.drop ? " drop-ok" : "")} onClick={() => onTab(t)} {...(({ drop: _d, ...rest }) => rest)(extra ?? {})}>
       {label}
       <span>{n}</span>
     </button>
@@ -68,6 +79,16 @@ export default function TabStrip({ tab, counts, presence = counts, collections, 
             <NameInput key={c.id} label="Yeni ad" initial={c.name} onCommit={(v) => void onRename?.(c.id, v)} onCancel={() => onRenameCancel?.()} />
           ) : (
             btn(`c${c.id}`, { kind: "collection", id: c.id }, c.name, counts.collection[c.id] ?? 0, {
+              drop: overId === c.id,
+              onDragEnter: (e) => accept(e) && setOverId(c.id),
+              onDragOver: (e) => accept(e) && setOverId(c.id),
+              onDragLeave: () => setOverId((o) => (o === c.id ? null : o)),
+              onDrop: (e) => {
+                if (!accept(e)) return;
+                const id = Number(e.dataTransfer.getData(GAME_MIME));
+                setOverId(null);
+                if (Number.isFinite(id)) onDropGame?.(c.id, id);
+              },
               onContextMenu: (e) => {
                 e.preventDefault();
                 onTabContext(c, e.clientX, e.clientY);

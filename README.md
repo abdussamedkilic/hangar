@@ -30,6 +30,24 @@ Anahtar girilmezse yalnızca kurulu Steam oyunları listelenir. Sahip olunan tü
 
 SteamID alanına kullanıcı adını değil, 17 haneli SteamID64 numarasını yazın; boş bırakabilirsiniz. Boşsa Hangar SteamID'yi Steam'in `loginusers.vdf` dosyasından alır.
 
+## Hesap bağlantıları (Steam)
+
+Steam hesabını bağlarsan sahip olduğun ama kurulu olmayan Steam oyunları API anahtarı olmadan listelenir. Bağlanmak isteğe bağlıdır.
+
+- **Giriş:** Hangar, Steam'in kendi giriş sayfasını ayrı bir pencerede açar (QR ya da şifre); şifreni Hangar görmez.
+- **Oturum nerede:** oturum, Hangar'a ait kalıcı bir tarayıcı profilinde (`%APPDATA%\com.hangar.app\webview-steam`) durur; sonraki taramalarda Hangar bu profille görünmez bir pencere açıp listeyi çeker. Hangar çerezlere dokunmaz; Steam'in geçici web anahtarı sayfadan dışarı çıkmaz, yalnızca oyun listesi alınır.
+- **Ne saklanıyor:** SteamID ve görünen ad, `accounts\steam.dat` dosyasında, Windows DPAPI ile şifreli.
+- **Nasıl silinir:** "Bağlantıyı kes" profil klasörünü, `steam.dat` dosyasını ve Steam liste önbelleğini siler; oturum Hangar'da biter (Steam sunucusunda oturum kapatılmaz).
+- **API anahtarı isteğe bağlı:** Hesaplar › Steam › "Gelişmiş" altına anahtar girilirse giriş yerine anahtar kullanılır.
+
+## Hesap bağlantıları (GOG)
+
+Varsayılan kaynak Galaxy'nin yerel veritabanıdır. Hesaplar › GOG › "Kaynak"ı "GOG hesabı" yaparsan sahip olunan liste GOG hesabından gelir.
+
+- **Giriş:** GOG'un kendi giriş sayfası ayrı bir pencerede açılır; Hangar şifreni görmez. Yalnızca GOG hesabıyla giriş yapılır.
+- **Ne saklanıyor:** yenileme belgesi, GOG kullanıcı kimliği ve görünen ad, `accounts\gog.dat` dosyasında, Windows DPAPI ile şifreli. "Bağlantıyı kes" dosyayı ve listeyi siler.
+- **Resmi olmayan yol:** Hangar, GOG Galaxy istemcisinin herkese açık istemci kimliğini kullanır. GOG bunu değiştirebilir ya da engelleyebilir; bu GOG'un kullanım koşullarına aykırı sayılabilir.
+
 ## Hesap bağlantıları (Epic)
 
 Epic hesabını bağlarsan sahip olduğun ama kurulu olmayan Epic oyunları da listelenir. Bağlanmak isteğe bağlıdır.

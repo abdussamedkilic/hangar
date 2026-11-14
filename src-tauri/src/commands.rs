@@ -1,4 +1,7 @@
+use crate::steam_scan;
 use hangar_core::accounts::epic::EpicClient;
+use hangar_core::accounts::gog::GogClient;
+use hangar_core::accounts::steam::SteamAccount;
 use hangar_core::accounts::ubisoft::UbiClient;
 use hangar_core::accounts::login::open_error;
 use hangar_core::artwork::ensure_cover;
@@ -81,7 +84,7 @@ fn steam_id_from_disk(root: &std::path::Path) -> Option<String> {
     steam::most_recent_steamid(&src)
 }
 
-fn scan(app: &AppHandle) -> Result<ScanReport, String> {
+fn scan(app: &AppHandle, steam_pre: Option<(steam_scan::Outcome, u64)>) -> Result<ScanReport, String> {
     let db = app.state::<Mutex<Db>>();
     let steam_p = SteamProvider::detect();
     let (key, saved_id) = {
@@ -101,9 +104,28 @@ fn scan(app: &AppHandle) -> Result<ScanReport, String> {
         }
     });
     let mut owned: OwnedLists = owned.into_iter().map(|r| (Platform::Steam, r)).collect();
+    // Alım sürerken Steam bağlandı/kesildiyse sonuç atılır (önbellek geri gelmesin).
+    let mut steam_pre = steam_pre.filter(|(_, g)| *g == steam_scan::generation()).map(|(o, _)| o);
+    let mut gog_account = false;
     // Epic network calls use their own connection: the shared DB lock is not held.
     match Db::open(&app.state::<DbPath>().0) {
         Ok(epic_db) => {
+            if let Some(o) = steam_pre.take() {
+                let (list, warn) = steam_scan::apply_outcome(&epic_db, o, now_secs());
+                if let Some(r) = list {
+                    owned.push((Platform::Steam, r));
+                }
+                extra.extend(warn);
+            }
+            let connected = app.state::<GogClient>().status(&epic_db).state != hangar_core::accounts::epic::AccountState::Disconnected;
+            if steam_scan::use_gog_account(&crate::accounts::gog_source(&epic_db), connected) {
+                gog_account = true;
+                let (gog, gog_warn) = app.state::<GogClient>().owned_for_scan(&epic_db);
+                if let Some(r) = gog {
+                    owned.push((Platform::Gog, r));
+                }
+                extra.extend(gog_warn);
+            }
             let (epic, epic_warn) = app.state::<EpicClient>().owned_for_scan(&epic_db);
             if let Some(r) = epic {
                 owned.push((Platform::Epic, r));
@@ -118,6 +140,11 @@ fn scan(app: &AppHandle) -> Result<ScanReport, String> {
         // Without its own connection Epic is not refreshed; the last known list comes from the shared one.
         Err(_) => {
             let g = db.lock().map_err(|_| "Veritabanı kilitlendi".to_string())?;
+            if steam_pre.is_some() {
+                if let Ok(Some(v)) = g.owned_cache_get(Platform::Steam) {
+                    owned.push((Platform::Steam, Ok(v)));
+                }
+            }
             if let Ok(Some(v)) = g.owned_cache_get(Platform::Epic) {
                 owned.push((Platform::Epic, Ok(v)));
             }
@@ -141,7 +168,7 @@ fn scan(app: &AppHandle) -> Result<ScanReport, String> {
         providers.push(Box::new(p));
     }
     if let Some(p) = GogProvider::detect() {
-        providers.push(Box::new(p));
+        providers.push(Box::new(p.with_owned_from_db(!gog_account)));
     }
     let g = db.lock().map_err(|_| "Veritabanı kilitlendi".to_string())?;
     providers.push(Box::new(LocalProvider::new(g.local_games().map_err(dberr)?)));
@@ -205,10 +232,40 @@ fn fetch_covers(app: AppHandle) {
     });
 }
 
-async fn rescan_inner(app: AppHandle) -> Result<ScanReport, String> {
+fn now_secs() -> i64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs() as i64)
+}
+
+/// Steam bağlıysa ve API anahtarı yoksa tarama öncesi gizli pencereyle listeyi çeker (en fazla 20 sn).
+/// `None` = Steam hesabı yolu kullanılmıyor.
+async fn steam_prefetch(app: &AppHandle, force: bool) -> Option<(steam_scan::Outcome, u64)> {
+    let a = app.clone();
+    let plan = tauri::async_runtime::spawn_blocking(move || {
+        let Ok(db) = Db::open(&a.state::<DbPath>().0) else { return Some(false) };
+        if setting(&db, "steam_api_key").is_some() || a.state::<SteamAccount>().load().ok().flatten().is_none() {
+            return None;
+        }
+        let go = steam_scan::steam_scan_decision(steam_scan::last_activity(&db), now_secs(), force);
+        if go {
+            // Deneme zamanı önceden yazılır: başarısız oturum her taramada pencere açmasın.
+            let _ = db.set_setting(steam_scan::LAST_ATTEMPT_KEY, &now_secs().to_string());
+        }
+        Some(go)
+    })
+    .await
+    .ok()??;
+    let gen = steam_scan::generation();
+    if !plan {
+        return Some((steam_scan::steam_skipped(), gen));
+    }
+    Some((steam_scan::steam_outcome(crate::accounts::fetch_steam_hidden(app).await), gen))
+}
+
+async fn rescan_inner(app: AppHandle, force: bool) -> Result<ScanReport, String> {
     let a = app.clone();
     let started = std::time::SystemTime::now();
-    let result = tauri::async_runtime::spawn_blocking(move || scan(&a)).await;
+    let steam_pre = steam_prefetch(&app, force).await;
+    let result = tauri::async_runtime::spawn_blocking(move || scan(&a, steam_pre)).await;
     // Recorded on failure too, so a persistent failure does not retrigger a scan on every focus.
     if let Ok(mut l) = app.state::<LastScan>().0.lock() {
         *l = Some(started);
@@ -233,8 +290,8 @@ pub fn galaxy_changed_since_scan(last: State<LastScan>) -> bool {
 }
 
 #[tauri::command]
-pub async fn rescan(app: AppHandle) -> Result<ScanReport, String> {
-    rescan_inner(app).await
+pub async fn rescan(app: AppHandle, force: Option<bool>) -> Result<ScanReport, String> {
+    rescan_inner(app, force.unwrap_or(false)).await
 }
 
 /// Fixed script: values reach PowerShell only through the env vars returned by
@@ -404,6 +461,23 @@ pub fn get_settings(db: Dbs) -> Result<Settings, String> {
     Ok(Settings { steam_api_key: setting(&g, "steam_api_key"), steam_id: setting(&g, "steam_id") })
 }
 
+#[derive(Serialize)]
+pub struct SteamAdvanced {
+    api_key: Option<String>,
+    steam_id: Option<String>,
+}
+
+#[tauri::command]
+pub fn get_steam_advanced(db: Dbs) -> Result<SteamAdvanced, String> {
+    let g = lock(&db)?;
+    Ok(SteamAdvanced { api_key: setting(&g, "steam_api_key"), steam_id: setting(&g, "steam_id") })
+}
+
+#[tauri::command]
+pub fn set_steam_advanced(db: Dbs, api_key: Option<String>, steam_id: Option<String>) -> Result<(), String> {
+    save_settings(db, api_key, steam_id)
+}
+
 #[tauri::command]
 pub fn save_settings(
     db: Dbs,
@@ -433,7 +507,7 @@ async fn override_and_rescan(
         .map_err(|_| "Veritabanı kilitlendi".to_string())?
         .add_override(Override { a, b, merged })
         .map_err(dberr)?;
-    rescan_inner(app).await
+    rescan_inner(app, false).await
 }
 
 #[tauri::command]
@@ -458,20 +532,20 @@ fn clean_local(title: &str, exe_path: &str) -> Result<(String, String), String> 
 pub async fn add_local_game(app: AppHandle, title: String, exe_path: String) -> Result<ScanReport, String> {
     let (title, exe) = clean_local(&title, &exe_path)?;
     lock(&app.state::<Mutex<Db>>())?.add_local_game(&title, &exe, "manual").map_err(dberr)?;
-    rescan_inner(app).await
+    rescan_inner(app, false).await
 }
 
 #[tauri::command]
 pub async fn update_local_game(app: AppHandle, id: i64, title: String, exe_path: String) -> Result<ScanReport, String> {
     let (title, exe) = clean_local(&title, &exe_path)?;
     lock(&app.state::<Mutex<Db>>())?.update_local_game(id, &title, &exe).map_err(dberr)?;
-    rescan_inner(app).await
+    rescan_inner(app, false).await
 }
 
 #[tauri::command]
 pub async fn remove_local_game(app: AppHandle, id: i64) -> Result<ScanReport, String> {
     lock(&app.state::<Mutex<Db>>())?.remove_local_game(id).map_err(dberr)?;
-    rescan_inner(app).await
+    rescan_inner(app, false).await
 }
 
 fn scan_folders_of(db: &Db) -> Result<Vec<String>, String> {
@@ -522,7 +596,7 @@ pub async fn add_local_games(app: AppHandle, items: Vec<Candidate>) -> Result<Sc
         .map(|c| clean_local(&c.title, &c.exe_path))
         .collect::<Result<Vec<_>, _>>()?;
     lock(&app.state::<Mutex<Db>>())?.add_local_games(&cleaned, "scan").map_err(dberr)?;
-    rescan_inner(app).await
+    rescan_inner(app, false).await
 }
 
 #[cfg(test)]

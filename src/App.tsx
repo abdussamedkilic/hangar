@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { api, type Collection, type EntryKey, type Game, type Settings } from "./lib/api";
-import { currentEntry, inCollection, installedCount, tabCounts, view } from "./lib/library";
+import { NONE, currentEntry, inCollection, filterCount, installedCount, tabCounts, view, type SavedFilter, type FilterRule } from "./lib/library";
 import { useLibrary } from "./state/useLibrary";
 import { useTheme } from "./state/useTheme";
 import Sidebar from "./components/Sidebar";
@@ -13,13 +13,20 @@ import GameList from "./components/GameList";
 import SettingsDialog from "./components/SettingsDialog";
 import MergePicker from "./components/MergePicker";
 import AddGameDialog from "./components/AddGameDialog";
+import FilterEditor from "./components/FilterEditor";
 import ContextMenu, { type MenuItem } from "./components/ContextMenu";
 
 export default function App() {
   const [prefs, setPrefs] = useState<Record<number, EntryKey>>({});
   const lib = useLibrary(useCallback(() => setPrefs({}), []));
-  const { games, selectedId, select, tab, setTab, installedOnly, setInstalledOnly, viewMode, setViewMode, collections, reloadCollections, query, setQuery, sort, setSort, warnings, rescanning, loaded, rescan, rescanLabeled, scanLabel, applyReport } = lib;
+  const { games, selectedId, select, tab, setTab, filter, setFilter, savedFilters, reloadFilters, sidebar, setSidebar, viewMode, setViewMode, collections, reloadCollections, query, setQuery, sort, setSort, warnings, rescanning, loaded, rescan, rescanLabeled, scanLabel, applyReport } = lib;
   const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<string | null>(null);
+  useEffect(() => {
+    if (!status) return;
+    const t = setTimeout(() => setStatus(null), 3000);
+    return () => clearTimeout(t);
+  }, [status]);
   const [themeWarnings, setThemeWarnings] = useState<string[]>([]);
   const theme = useTheme(setThemeWarnings);
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -28,6 +35,9 @@ export default function App() {
   const [mergeFor, setMergeFor] = useState<Game | null>(null);
   const [tabCtx, setTabCtx] = useState<{ col: Collection; x: number; y: number } | null>(null);
   const [renamingId, setRenamingId] = useState<number | null>(null);
+  const [filterDlg, setFilterDlg] = useState<SavedFilter | "new" | null>(null);
+  const [filterCtx, setFilterCtx] = useState<{ f: SavedFilter; x: number; y: number } | null>(null);
+  const [steamOn, setSteamOn] = useState(false);
   const [localDlg, setLocalDlg] = useState<{ id: number; title: string; exe: string } | "new" | null>(null);
 
   const loadSettings = useCallback(() => {
@@ -37,18 +47,33 @@ export default function App() {
       .catch(() => {});
   }, []);
   useEffect(loadSettings, [loadSettings]);
+  useEffect(() => {
+    // Ayarlar açılıp kapanınca (yeni API anahtarı, hesap) ipucunun girdileri tazelenir.
+    loadSettings();
+    Promise.resolve()
+      .then(() => api.getAccounts())
+      .then((l) => setSteamOn(l.some((a) => a.platform === "steam" && a.state === "connected")))
+      .catch(() => {});
+  }, [showSettings, loadSettings]);
   const closeSettings = useCallback(() => setShowSettings(false), []);
   const closeCtx = useCallback(() => setCtx(null), []);
   const closeMerge = useCallback(() => setMergeFor(null), []);
   const closeLocal = useCallback(() => setLocalDlg(null), []);
+  const closeFilterDlg = useCallback(() => setFilterDlg(null), []);
+  const closeFilterCtx = useCallback(() => setFilterCtx(null), []);
   const closeTabCtx = useCallback(() => setTabCtx(null), []);
   const cancelRename = useCallback(() => setRenamingId(null), []);
 
-  const counts = useMemo(() => tabCounts(games, installedOnly, collections), [games, installedOnly, collections]);
+  const installedOnly = filter.kind === "installed";
+  const counts = useMemo(() => tabCounts(games, filter, savedFilters, collections), [games, filter, savedFilters, collections]);
   // Tab presence ignores "Kurulu" so toggling it never removes a store tab or resets ui.tab.
-  const presence = useMemo(() => tabCounts(games, false, collections), [games, collections]);
-  const instCount = useMemo(() => installedCount(games, tab, collections), [games, tab, collections]);
-  const visible = useMemo(() => view(games, tab, installedOnly, collections, query, sort), [games, tab, installedOnly, collections, query, sort]);
+  const presence = useMemo(() => tabCounts(games, NONE, [], collections), [games, collections]);
+  const sideCounts = useMemo(() => {
+    const c: Record<string, number> = { installed: installedCount(games, tab, collections) };
+    for (const f of savedFilters) c[String(f.id)] = filterCount(games, tab, { kind: "saved", id: f.id }, savedFilters, collections);
+    return c;
+  }, [games, tab, collections, savedFilters]);
+  const visible = useMemo(() => view(games, tab, filter, savedFilters, collections, query, sort), [games, tab, filter, savedFilters, collections, query, sort]);
 
   // A tab that vanished (no games / deleted collection) falls back to "Tümü".
   useEffect(() => {
@@ -64,7 +89,7 @@ export default function App() {
   }, [selected, selectedId, select]);
 
   const game = selected && prefs[selected.id] ? { ...selected, preferred: prefs[selected.id], default_entry: prefs[selected.id] } : selected;
-  const notice = [...(error ? [error] : []), ...themeWarnings, ...warnings].join(" · ");
+  const notice = [...(error ? [error] : []), ...(status ? [status] : []), ...themeWarnings, ...warnings].join(" · ");
 
   const launch = ([p, id]: EntryKey) => {
     if (!game) return;
@@ -154,7 +179,40 @@ export default function App() {
       await reloadCollections();
     });
   };
+  const saveFilter = async (name: string, rule: FilterRule) => {
+    const json = JSON.stringify(rule);
+    if (filterDlg && filterDlg !== "new") await api.updateFilter(filterDlg.id, name, json);
+    else {
+      const id = await api.createFilter(name, json);
+      await reloadFilters();
+      setFilter({ kind: "saved", id });
+      return;
+    }
+    await reloadFilters();
+  };
+  const deleteFilter = (f: SavedFilter) => {
+    if (!window.confirm(`“${f.name}” filtresi silinsin mi?`)) return;
+    void guard(async () => {
+      await api.deleteFilter(f.id);
+      if (filter.kind === "saved" && filter.id === f.id) setFilter(NONE);
+      await reloadFilters();
+    });
+  };
   const cardEntries = (g: Game): EntryKey[] => g.entries.map((e) => [e.platform, e.platform_id]);
+  const dropGame = (collectionId: number, gameId: number) => {
+    const g = games.find((x) => x.id === gameId);
+    const c = collections.find((x) => x.id === collectionId);
+    if (!g || !c) return;
+    if (inCollection(g, c)) {
+      setStatus(`${g.title} zaten ${c.name} içinde`);
+      return;
+    }
+    void guard(async () => {
+      await api.setInCollection(c.id, cardEntries(g), true);
+      await reloadCollections();
+      setStatus(`${g.title} ${c.name} koleksiyonuna eklendi`);
+    });
+  };
   const cardMenu = (g: Game): MenuItem[] => [
     { label: "Şununla birleştir…", onSelect: () => setMergeFor(g) },
     { label: "Kapak seç…", onSelect: () => void pickCover(g) },
@@ -185,16 +243,28 @@ export default function App() {
     },
   ];
   const openSettings = () => {
-    if (settings === null) loadSettings();
     setShowSettings(true);
   };
 
   const empty = loaded && games.length === 0 && !rescanning;
-  const nudge = settings !== null && !settings.steam_api_key && !installedOnly;
+  const nudge = settings !== null && !settings.steam_api_key && !steamOn && filter.kind !== "installed";
 
   return (
-    <div className="app">
-      <Sidebar installedOnly={installedOnly} installedCount={instCount} onToggleInstalled={() => setInstalledOnly(!installedOnly)} onSettings={openSettings} onRescan={rescan} onAdd={() => setLocalDlg("new")} rescanning={rescanning} />
+    <div className={`app${sidebar === "collapsed" ? " sb-collapsed" : ""}`}>
+      <Sidebar
+        collapsed={sidebar === "collapsed"}
+        onToggleCollapsed={() => setSidebar(sidebar === "collapsed" ? "open" : "collapsed")}
+        filter={filter}
+        savedFilters={savedFilters}
+        counts={sideCounts}
+        onFilter={setFilter}
+        onNewFilter={() => setFilterDlg("new")}
+        onFilterContext={(f, x, y) => setFilterCtx({ f, x, y })}
+        onSettings={openSettings}
+        onRescan={() => rescan(true)}
+        onAdd={() => setLocalDlg("new")}
+        rescanning={rescanning}
+      />
       <main>
         {rescanning && <span className="scan" role="status">{scanLabel ?? "Taranıyor…"}</span>}
         <Stage game={game} onLaunch={launch} onChoose={choose} onSplit={split} onEdit={editLocal} onRemove={removeLocal} />
@@ -207,11 +277,12 @@ export default function App() {
           installedOnly={installedOnly}
           renamingId={renamingId}
           onTab={setTab}
-          onClearInstalled={() => setInstalledOnly(false)}
+          onClearInstalled={() => setFilter(NONE)}
           onCreate={createCollection}
           onRename={renameCollection}
           onRenameCancel={cancelRename}
           onTabContext={(col, x, y) => setTabCtx({ col, x, y })}
+          onDropGame={dropGame}
           viewMode={viewMode}
           onViewMode={setViewMode}
         />
@@ -234,10 +305,12 @@ export default function App() {
           />
         )}
       </main>
-      {showSettings && settings !== null && <SettingsDialog settings={settings} onResetTheme={theme.reset} onScanned={applyReport} onAccountsChanged={(l) => (l ? rescanLabeled(l) : rescan())} onSaved={async () => { loadSettings(); await rescan(); }} onClose={closeSettings} />}
+      {showSettings && <SettingsDialog sidebar={sidebar} onSidebar={setSidebar} onResetTheme={theme.reset} onScanned={applyReport} onAccountsChanged={(l) => (l ? rescanLabeled(l) : rescan(false))} onClose={closeSettings} />}
       {localDlg && <AddGameDialog edit={localDlg === "new" ? undefined : localDlg} onDone={applyReport} onClose={closeLocal} />}
       {ctx && <ContextMenu x={ctx.x} y={ctx.y} onClose={closeCtx} items={cardMenu(ctx.game)} />}
       {tabCtx && <ContextMenu x={tabCtx.x} y={tabCtx.y} onClose={closeTabCtx} items={[{ label: "Yeniden adlandır", onSelect: () => setRenamingId(tabCtx.col.id) }, { label: "Sil", onSelect: () => deleteCollection(tabCtx.col) }]} />}
+      {filterDlg && <FilterEditor initial={filterDlg === "new" ? undefined : filterDlg} collections={collections} onSave={saveFilter} onClose={closeFilterDlg} />}
+      {filterCtx && <ContextMenu x={filterCtx.x} y={filterCtx.y} onClose={closeFilterCtx} items={[{ label: "Düzenle", onSelect: () => setFilterDlg(filterCtx.f) }, { label: "Sil", onSelect: () => deleteFilter(filterCtx.f) }]} />}
       {mergeFor && <MergePicker source={mergeFor} games={games} onPick={(g) => merge(mergeFor, g)} onClose={closeMerge} />}
     </div>
   );

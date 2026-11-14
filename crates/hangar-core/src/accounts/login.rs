@@ -71,6 +71,149 @@ pub fn ubi_login_url() -> String {
     )
 }
 
+/// GOG girişi (G0 keşfi): giriş + captcha; `embed.gog.com` yalnızca `/on_login_success` (kod yakalama sayfası).
+pub const GOG_NAV_RULES: &[(&str, bool, &[&str])] = &[
+    ("auth.gog.com", true, &[]),
+    ("login.gog.com", true, &[]),
+    ("embed.gog.com", true, &["/on_login_success"]),
+    ("hcaptcha.com", false, &[]),
+    ("www.google.com", true, &["/recaptcha"]),
+    ("www.recaptcha.net", true, &["/recaptcha"]),
+];
+
+pub fn gog_login_url() -> String {
+    format!(
+        "https://auth.gog.com/auth?client_id={}&redirect_uri=https%3A%2F%2Fembed.gog.com%2Fon_login_success%3Forigin%3Dclient&response_type=code&layout=client2",
+        super::gog_api::CLIENT_ID
+    )
+}
+
+/// `embed.gog.com/on_login_success` sayfasında `code` parametresini nonce'lu geri dönüşle yollar.
+pub fn gog_init_script(nonce: &str) -> String {
+    assert!(
+        nonce.len() == 32 && nonce.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')),
+        "invalid nonce"
+    );
+    format!(
+        r#"(function(){{try{{
+  if (window.top !== window) return;
+  if (location.origin !== 'https://embed.gog.com' || location.pathname !== '/on_login_success') return;
+  var c = new URLSearchParams(location.search).get('code');
+  if (c) location.replace('https://hangar.invalid/callback?n={nonce}&code=' + encodeURIComponent(c));
+}}catch(e){{}}}})();"#
+    )
+}
+
+pub fn gog_window_title(url: &url::Url) -> String {
+    format!("GOG girişi — {}", url.host_str().unwrap_or(""))
+}
+
+/// Steam girişi (S0 keşfi): tam konaklar, port yok, yalnızca https; captcha konakları alt alanlarıyla.
+pub const STEAM_NAV_RULES: &[(&str, bool, &[&str])] = &[
+    ("steamcommunity.com", true, &[]),
+    ("store.steampowered.com", true, &[]),
+    ("login.steampowered.com", true, &[]),
+    ("help.steampowered.com", true, &[]),
+    ("checkout.steampowered.com", true, &[]),
+    ("hcaptcha.com", false, &[]),
+    ("arkoselabs.com", false, &[]),
+    ("funcaptcha.com", false, &[]),
+    ("google.com", false, &["/recaptcha"]),
+    ("gstatic.com", false, &["/recaptcha"]),
+];
+
+pub fn steam_login_url() -> String {
+    "https://store.steampowered.com/login/?redir=".to_string()
+}
+
+pub fn steam_window_title(url: &url::Url) -> String {
+    format!("Steam girişi — {}", url.host_str().unwrap_or(""))
+}
+
+/// Gizli Steam alımında betiğin "giriş yok" teslim süresi (ms); Rust zaman aşımından kısa olmalı.
+pub const STEAM_HIDDEN_NOLOGIN_MS: u64 = 12000;
+/// Gizli Steam alımı için Rust tarafı zaman aşımı (sn).
+pub const STEAM_HIDDEN_TIMEOUT_SECS: u64 = 20;
+
+const STEAM_SCRIPT: &str = r#"(function(){try{
+  if (window.top !== window) return;
+  var N = '__NONCE__';
+  var HIDDEN = __HIDDEN__;
+  var h = location.hostname;
+  var now = function(){ return Date.now(); };
+  var mark = function(k){ try { var v = sessionStorage.getItem(k); if (v) return +v; v = now(); sessionStorage.setItem(k, '' + v); return v; } catch(e){ return now(); } };
+  var T0 = mark('hg_t0');
+  var L0 = 0;
+  var isId = function(s){ return typeof s === 'string' && /^7656\d{13}$/.test(s); };
+  var cfg = function(){ try { var e = document.getElementById('application_config'); var u = e && e.getAttribute('data-userinfo'); return u ? JSON.parse(u) : null; } catch(x){ return null; } };
+  var info = function(){
+    var c = cfg() || {}, sid = '', acc = 0;
+    if (isId(window.g_steamID)) sid = window.g_steamID; else if (isId('' + c.steamid)) sid = '' + c.steamid;
+    if (typeof window.g_AccountID === 'number' && window.g_AccountID > 0) acc = window.g_AccountID; else if (+c.accountid > 0) acc = +c.accountid;
+    if (!sid && acc) { try { sid = (BigInt(acc) + BigInt('76561197960265728')).toString(); } catch(e){} }
+    var nm = '';
+    try { nm = ('' + (c.accountname || '')).slice(0, 64); } catch(e){}
+    return {sid: sid, acc: acc, name: nm};
+  };
+  var hint = function(){ try { return !!document.querySelector('a[href*="Logout"],a[href*="/logout"],#account_pulldown,#account_dropdown,.persona_name'); } catch(e){ return false; } };
+  var readTok = function(){
+    var t = '';
+    try { var ac = document.getElementById('application_config');
+      if (ac) { var lt = ac.getAttribute('data-loyalty_webapi_token'); if (lt) { try { t = JSON.parse(lt); } catch(e){ t = lt; } }
+        if (!t) { var uc = ac.getAttribute('data-store_user_config'); if (uc) { try { t = JSON.parse(uc).webapi_token || ''; } catch(e){} } } } } catch(e){}
+    return typeof t === 'string' ? t : '';
+  };
+  var sent = false, busy = false, redirected = false;
+  var deliver = function(o){ if (sent) return; sent = true; location.replace('https://hangar.invalid/callback?n=' + N + '&code=' + encodeURIComponent(JSON.stringify(o))); };
+  var fetchGames = function(i){
+    busy = true;
+    var tok = readTok();
+    var ctl = new AbortController(); var to = setTimeout(function(){ try { ctl.abort(); } catch(e){} }, 12000);
+    fetch('https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?access_token=' + encodeURIComponent(tok) + '&steamid=' + i.sid + '&include_appinfo=1&include_played_free_games=1&format=json', {signal: ctl.signal})
+      .then(function(r){ clearTimeout(to); if (r.status !== 200) return deliver({failed: 'http ' + r.status}); return r.json().then(function(j){
+        var rs = j && j.response;
+        if (!rs || typeof rs !== 'object') return deliver({failed: 'bos-yanit'});
+        var gm = (Array.isArray(rs.games) ? rs.games : []).map(function(g){ return {appid: g.appid, name: g.name, playtime_forever: g.playtime_forever, rtime_last_played: g.rtime_last_played}; });
+        deliver({games: {games: gm}, steamid: i.sid, name: i.name});
+      }); })
+      .catch(function(){ clearTimeout(to); deliver({failed: 'ag-hatasi'}); });
+  };
+  var tick = function(){ try {
+    if (sent) return;
+    var i = info(), li = !!(i.sid || i.acc) || hint();
+    if (li && !L0) L0 = mark('hg_l0');
+    try { document.title = 'Hangar · ' + (li ? 'Steam kütüphanesi okunuyor' : 'giriş bekleniyor'); } catch(e){}
+    if (!li) {
+      if (HIDDEN && now() - T0 > __NOLOGIN_MS__) return deliver({nologin: true});
+      if (now() - T0 > 300000) return deliver({nologin: true});
+      return;
+    }
+    if (now() - L0 > 20000) return deliver({failed: 'zaman-asimi'});
+    if (h !== 'store.steampowered.com') {
+      if (!redirected && i.sid && h === 'steamcommunity.com' && location.pathname.indexOf('/login') !== 0) { redirected = true; location.replace('https://store.steampowered.com/'); }
+      return;
+    }
+    if (!busy && i.sid && readTok()) fetchGames(i);
+  } catch(e){} };
+  setInterval(tick, 500);
+}catch(e){}})();"#;
+
+/// Steam girişi: giriş (id / `data-userinfo`) görününce mağazaya geçer; mağaza sayfasındaki web
+/// erişim anahtarıyla aynı sayfadan `GetOwnedGames` çağrılır. Teslim: `{games,steamid,name}`,
+/// `{nologin:true}` veya `{failed}`; anahtar asla teslim edilmez. Girişten sonra 20 sn içinde teslim eder.
+pub fn steam_init_script(nonce: &str) -> String {
+    assert!(
+        nonce.len() == 32 && nonce.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')),
+        "invalid nonce"
+    );
+    STEAM_SCRIPT.replace("__NONCE__", nonce).replace("__NOLOGIN_MS__", &STEAM_HIDDEN_NOLOGIN_MS.to_string()).replace("__HIDDEN__", "false")
+}
+
+/// Sessiz yenileme: girişli oturum yoksa ~20 sn içinde `{nologin:true}` teslim eder.
+pub fn steam_init_script_hidden(nonce: &str) -> String {
+    steam_init_script(nonce).replacen("var HIDDEN = false;", "var HIDDEN = true;", 1)
+}
+
 fn nav_allowed_with(url: &url::Url, rules: &[(&str, bool, &[&str])]) -> bool {
     let host = url.host_str().unwrap_or("");
     let path = url.path();
@@ -198,6 +341,13 @@ pub fn open_error(uri: &str, err: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn hidden_nologin_deadline_precedes_timeout() {
+        assert!(STEAM_HIDDEN_NOLOGIN_MS < STEAM_HIDDEN_TIMEOUT_SECS * 1000);
+        let s = steam_init_script_hidden(&"a".repeat(32));
+        assert!(s.contains("> 12000) return deliver({nologin: true})") && !s.contains("__NOLOGIN_MS__"));
+    }
     const N: &str = "0123456789abcdef0123456789abcdef";
     fn u(s: &str) -> url::Url { url::Url::parse(s).unwrap() }
     #[test] fn callback_extracts_code() { assert!(matches!(decide(&u(&format!("https://hangar.invalid/callback?n={N}&code=abc%2B1")), N), NavDecision::Callback(c) if c == "abc+1")); }
@@ -254,6 +404,20 @@ mod tests {
     }
     #[test] #[should_panic] fn ubi_init_script_rejects_bad_nonce() { ubi_init_script("a';alert(1);'"); }
     #[test] fn ubi_login_url_has_app_id() { assert!(ubi_login_url().contains(UBI_APP_ID)); }
+    #[test] fn gog_allowlist_and_script() {
+        let d = |s: &str| decide_with(&u(s), N, GOG_NAV_RULES);
+        for ok in ["https://auth.gog.com/auth?x=1", "https://login.gog.com/login", "https://embed.gog.com/on_login_success?origin=client&code=x", "https://www.google.com/recaptcha/api2/anchor", "https://newassets.hcaptcha.com/x"] {
+            assert!(matches!(d(ok), NavDecision::Allow), "{ok}");
+        }
+        for bad in ["https://www.gog.com/", "https://embed.gog.com/user/data/games", "https://www.google.com/search", "http://auth.gog.com/", "https://auth.gog.com:8443/"] {
+            assert!(matches!(d(bad), NavDecision::Block), "{bad}");
+        }
+        let s = gog_init_script(N);
+        for p in [N, "on_login_success", "embed.gog.com", "https://hangar.invalid/callback?n="] { assert!(s.contains(p), "{p}"); }
+        assert!(gog_login_url().contains("client_id=46899977096215655"));
+        assert_eq!(gog_window_title(&u("https://auth.gog.com/auth")), "GOG girişi — auth.gog.com");
+    }
+    #[test] #[should_panic] fn gog_init_script_rejects_bad_nonce() { gog_init_script("a';alert(1);'"); }
     #[test] fn title_shows_host() { assert_eq!(window_title(&u("https://www.epicgames.com/id/login")), "Epic Games girişi — www.epicgames.com"); }
     #[test] fn open_error_texts() {
         assert_eq!(open_error("com.epicgames.launcher://apps/x?action=install", "e"), "Epic Games Launcher açılamadı — kurulu mu?");

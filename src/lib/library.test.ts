@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { currentEntry, installedCount, isInstalled, normalize, parseTab, tabCounts, tabKey, view, type Game, type Platform, type PlatformEntry, type Tab } from "./library";
+import { currentEntry, installedCount, isInstalled, matchesRule, normalize, parseTab, tabCounts, tabKey, view, type Game, type Platform, type PlatformEntry, type Tab, type FilterRule, type SavedFilter, type ActiveFilter } from "./library";
 import type { Collection } from "./api";
 
+const NONE: ActiveFilter = { kind: "none" };
+const INST: ActiveFilter = { kind: "installed" };
 const ALL: Tab = { kind: "all" };
 const plat = (platform: Platform): Tab => ({ kind: "platform", platform });
 
@@ -39,27 +41,27 @@ describe("view", () => {
   const all = [a, b, c];
 
   it("filters", () => {
-    expect(view(all, ALL, true, [], "", "title")).toEqual([a, c]);
-    expect(view(all, plat("epic"), false, [], "", "title")).toEqual([b]);
-    expect(view(all, ALL, false, [], "", "title")).toHaveLength(3);
+    expect(view(all, ALL, INST, [], [], "", "title")).toEqual([a, c]);
+    expect(view(all, plat("epic"), NONE, [], [], "", "title")).toEqual([b]);
+    expect(view(all, ALL, NONE, [], [], "", "title")).toHaveLength(3);
   });
   it("searches Turkish", () => {
-    expect(view(all, ALL, false, [], "ıstanbul", "title")).toEqual([c]);
-    expect(view(all, ALL, false, [], "ISTANBUL", "title")).toEqual([c]);
-    expect(view(all, ALL, false, [], "", "title")).toHaveLength(3);
+    expect(view(all, ALL, NONE, [], [], "ıstanbul", "title")).toEqual([c]);
+    expect(view(all, ALL, NONE, [], [], "ISTANBUL", "title")).toEqual([c]);
+    expect(view(all, ALL, NONE, [], [], "", "title")).toHaveLength(3);
   });
   it("sorts recent by max(last_played, last_launched), nulls last", () => {
     const x = game("X", [entry("steam", { last_played: 100 })]);
     const y = game("Y", [entry("steam", { last_played: 50 })], { last_launched: 200 });
     const z = game("Z", [entry("steam")]);
     const w = game("W", [entry("steam")]);
-    expect(view([z, x, w, y], ALL, false, [], "", "recent").map((g) => g.title)).toEqual(["Y", "X", "W", "Z"]);
+    expect(view([z, x, w, y], ALL, NONE, [], [], "", "recent").map((g) => g.title)).toEqual(["Y", "X", "W", "Z"]);
   });
   it("sorts by playtime desc", () => {
     const p = game("P", [entry("steam", { playtime_min: 10 }), entry("epic", { playtime_min: 5 })]);
     const q = game("Q", [entry("steam", { playtime_min: 12 })]);
     const r = game("R", [entry("steam")]);
-    expect(view([r, q, p], ALL, false, [], "", "playtime").map((g) => g.title)).toEqual(["P", "Q", "R"]);
+    expect(view([r, q, p], ALL, NONE, [], [], "", "playtime").map((g) => g.title)).toEqual(["P", "Q", "R"]);
   });
 });
 
@@ -79,12 +81,12 @@ describe("currentEntry / isInstalled", () => {
 describe("tabs", () => {
   it("ubisoft tab + installed excludes steam-installed merged card", () => {
     const w = game("Watch_Dogs", [entry("steam", { installed: true }), entry("ubisoft")]);
-    expect(view([w], plat("ubisoft"), true, [], "", "title")).toEqual([]);
-    expect(view([w], plat("steam"), true, [], "", "title")).toHaveLength(1);
-    expect(view([w], ALL, true, [], "", "title")).toHaveLength(1);
+    expect(view([w], plat("ubisoft"), INST, [], [], "", "title")).toEqual([]);
+    expect(view([w], plat("steam"), INST, [], [], "", "title")).toHaveLength(1);
+    expect(view([w], ALL, INST, [], [], "", "title")).toHaveLength(1);
   });
   it("merged card counts in both store tabs", () => {
-    const c = tabCounts([game("W", [entry("steam"), entry("ubisoft")])], false, []);
+    const c = tabCounts([game("W", [entry("steam"), entry("ubisoft")])], NONE, [], []);
     expect(c.platform.steam).toBe(1);
     expect(c.platform.ubisoft).toBe(1);
   });
@@ -92,7 +94,7 @@ describe("tabs", () => {
     const m = game("M", [entry("steam", { platform_id: "1" }), entry("epic", { platform_id: "2" })]);
     const o = game("O", [entry("steam", { platform_id: "9" })]);
     const cols: Collection[] = [{ id: 5, name: "x", entries: [["epic", "2"]] }];
-    expect(view([m, o], { kind: "collection", id: 5 }, false, cols, "", "title")).toEqual([m]);
+    expect(view([m, o], { kind: "collection", id: 5 }, NONE, [], cols, "", "title")).toEqual([m]);
   });
   it("parseTab unknown collection falls back to all", () => {
     expect(parseTab("c:7", [])).toEqual(ALL);
@@ -107,7 +109,7 @@ describe("tabs", () => {
   it("tabCounts respects installedOnly", () => {
     const gs = [game("a", [entry("steam", { installed: true })]), game("b", [entry("steam"), entry("epic")])];
     const cols: Collection[] = [{ id: 1, name: "c", entries: [["steam", "1"]] }];
-    const c = tabCounts(gs, true, cols);
+    const c = tabCounts(gs, INST, [], cols);
     expect(c.all).toBe(1);
     expect(c.platform).toEqual({ steam: 1, epic: 0, ubisoft: 0, gog: 0, riot: 0, local: 0 });
     expect(c.collection[1]).toBe(1);
@@ -124,5 +126,52 @@ describe("tabs", () => {
     const c = game("c", [entry("steam", { platform_id: "3" })]);
     const cols: Collection[] = [{ id: 7, name: "k", entries: [["steam", "1"], ["steam", "3"]] }];
     expect(installedCount([a, b, c], { kind: "collection", id: 7 }, cols)).toBe(1);
+  });
+});
+
+describe("matchesRule", () => {
+  const m = (g: Game, r: FilterRule, t: Tab = ALL, cols: Collection[] = []) => matchesRule(g, r, t, cols);
+  it("played rule counts steam playtime and hangar launches", () => {
+    expect(m(game("A", [entry("steam", { playtime_min: 5 })]), { played: "yes" })).toBe(true);
+    expect(m(game("B", [entry("epic")], { last_launched: 9 }), { played: "yes" })).toBe(true);
+    expect(m(game("C", [entry("epic", { last_played: 3 })]), { played: "yes" })).toBe(true);
+    const never = game("D", [entry("steam", { playtime_min: 0 })]);
+    expect(m(never, { played: "yes" })).toBe(false);
+    expect(m(never, { played: "no" })).toBe(true);
+  });
+  it("stores rule is OR", () => {
+    const g = game("A", [entry("steam")]);
+    expect(m(g, { stores: ["epic", "steam"] })).toBe(true);
+    expect(m(g, { stores: ["epic", "gog"] })).toBe(false);
+    expect(m(g, { stores: [] })).toBe(true);
+  });
+  it("rule with deleted collection ignores criterion", () => {
+    const g = game("A", [entry("steam")]);
+    expect(m(g, { collection: { id: 99, in: true } })).toBe(true);
+    const cols: Collection[] = [{ id: 1, name: "X", entries: [["steam", "1"]] }];
+    expect(m(g, { collection: { id: 1, in: true } }, ALL, cols)).toBe(true);
+    expect(m(g, { collection: { id: 1, in: false } }, ALL, cols)).toBe(false);
+  });
+  it("edition special vs original", () => {
+    const sp = game("A", [entry("steam", { edition: "Remastered" })]);
+    const og = game("B", [entry("steam")]);
+    expect(m(sp, { edition: "special" })).toBe(true);
+    expect(m(og, { edition: "special" })).toBe(false);
+    expect(m(og, { edition: "original" })).toBe(true);
+    expect(m(sp, { edition: "original" })).toBe(false);
+  });
+  it("installed rule respects store tab", () => {
+    const w = game("W", [entry("steam", { installed: true }), entry("ubisoft")]);
+    expect(m(w, { installed: "yes" }, plat("ubisoft"))).toBe(false);
+    expect(m(w, { installed: "yes" }, plat("steam"))).toBe(true);
+    expect(m(w, { installed: "no" }, plat("ubisoft"))).toBe(true);
+  });
+  it("saved filter drives view/tabCounts; deleted id means none", () => {
+    const a = game("Alpha", [entry("steam", { installed: true })]);
+    const b = game("Beta", [entry("epic")]);
+    const saved: SavedFilter[] = [{ id: 3, name: "E", rule: { stores: ["epic"] } }];
+    expect(view([a, b], ALL, { kind: "saved", id: 3 }, saved, [], "", "title")).toEqual([b]);
+    expect(view([a, b], ALL, { kind: "saved", id: 9 }, saved, [], "", "title")).toHaveLength(2);
+    expect(tabCounts([a, b], { kind: "saved", id: 3 }, saved, []).all).toBe(1);
   });
 });

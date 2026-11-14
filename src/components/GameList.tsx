@@ -45,6 +45,11 @@ export default function GameList({ games, selectedId, onSelect, onContext, onLau
               className={`lrow${g.id === selectedId ? " sel" : ""}${inst ? "" : " notinst"}`}
               style={{ height: ROW_H, transform: `translateY(${v.index * ROW_H}px)` }}
               onClick={() => onSelect(g.id)}
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.setData("application/x-hangar-game", String(g.id));
+                e.dataTransfer.effectAllowed = "copy";
+              }}
               onContextMenu={(e) => {
                 if (!onContext) return;
                 e.preventDefault();

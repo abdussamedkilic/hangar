@@ -1,4 +1,4 @@
-use super::{AuthError, StoredCred, UbiCred};
+use super::{AuthError, GogCred, SteamCred, StoredCred, UbiCred};
 use crate::model::Platform;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -78,6 +78,46 @@ pub fn load_cred(store: &dyn SecretStore) -> Result<Option<StoredCred>, AuthErro
     match parsed {
         Ok(c) if c.v == 1 => Ok(Some(c)),
         // Readable but from an unknown format version: not usable, but not ours to delete.
+        Ok(_) => Err(AuthError::NotConnected),
+        Err(_) => Err(AuthError::Corrupt),
+    }
+}
+
+pub fn save_gog_cred(store: &dyn SecretStore, c: &GogCred) -> std::io::Result<()> {
+    let mut json = serde_json::to_vec(c).map_err(std::io::Error::other)?;
+    let r = store.save(Platform::Gog, &json);
+    zeroize::Zeroize::zeroize(&mut json);
+    r
+}
+
+pub fn load_gog_cred(store: &dyn SecretStore) -> Result<Option<GogCred>, AuthError> {
+    let Some(mut raw) = store.load(Platform::Gog)? else {
+        return Ok(None);
+    };
+    let parsed = serde_json::from_slice::<GogCred>(&raw);
+    zeroize::Zeroize::zeroize(&mut raw);
+    match parsed {
+        Ok(c) if c.v == 1 => Ok(Some(c)),
+        Ok(_) => Err(AuthError::NotConnected),
+        Err(_) => Err(AuthError::Corrupt),
+    }
+}
+
+pub fn save_steam_cred(store: &dyn SecretStore, c: &SteamCred) -> std::io::Result<()> {
+    let mut json = serde_json::to_vec(c).map_err(std::io::Error::other)?;
+    let r = store.save(Platform::Steam, &json);
+    zeroize::Zeroize::zeroize(&mut json);
+    r
+}
+
+pub fn load_steam_cred(store: &dyn SecretStore) -> Result<Option<SteamCred>, AuthError> {
+    let Some(mut raw) = store.load(Platform::Steam)? else {
+        return Ok(None);
+    };
+    let parsed = serde_json::from_slice::<SteamCred>(&raw);
+    zeroize::Zeroize::zeroize(&mut raw);
+    match parsed {
+        Ok(c) if c.v == 1 => Ok(Some(c)),
         Ok(_) => Err(AuthError::NotConnected),
         Err(_) => Err(AuthError::Corrupt),
     }

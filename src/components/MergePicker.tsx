@@ -13,7 +13,7 @@ interface Props {
 
 export default function MergePicker({ source, games, onPick, onClose }: Props) {
   const [q, setQ] = useState("");
-  const list = useMemo(() => view(games, { kind: "all" }, false, [], q, "title").filter((g) => g.id !== source.id), [games, q, source.id]);
+  const list = useMemo(() => view(games, { kind: "all" }, { kind: "none" }, [], [], q, "title").filter((g) => g.id !== source.id), [games, q, source.id]);
   return (
     <Modal label="Şununla birleştir" onClose={onClose}>
       <h2>Şununla birleştir</h2>

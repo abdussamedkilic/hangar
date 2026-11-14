@@ -10,6 +10,7 @@ use tauri::webview::NewWindowResponse;
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 
 const LABEL: &str = "account-login";
+pub const STEAM_LABEL: &str = "steam-session";
 
 #[derive(Debug)]
 pub enum LoginError {
@@ -54,6 +55,13 @@ pub async fn login_ubisoft(app: &AppHandle) -> Result<String, LoginError> {
         .map(|o| o.code)
 }
 
+/// Açık giriş/Steam penceresini kapatır (varsa).
+pub fn close_login_window(app: &AppHandle, label: &str) {
+    if let Some(w) = app.get_webview_window(label) {
+        let _ = w.close();
+    }
+}
+
 type Rules = &'static [(&'static str, bool, &'static [&'static str])];
 
 /// Sağlayıcıdan bağımsız giriş akışı: adres, gezinme kuralları, nonce'lu betik ve başlık sağlayıcıya özgü.
@@ -64,8 +72,33 @@ pub async fn login_flow(
     script: fn(&str) -> String,
     title: fn(&tauri::Url) -> String,
 ) -> Result<LoginOutcome, LoginError> {
-    if let Some(w) = app.get_webview_window(LABEL) {
-        let _ = w.set_focus();
+    login_flow_with(app, url, rules, script, title, FlowOpts::default()).await
+}
+
+/// İsteğe bağlı: kalıcı WebView2 veri klasörü (verilirse incognito değil) ve gizli pencere.
+#[derive(Default)]
+pub struct FlowOpts {
+    pub data_dir: Option<std::path::PathBuf>,
+    pub hidden: bool,
+    /// Pencere etiketi; `None` -> `LABEL`. Steam kendi etiketini kullanır, kullanıcı girişleriyle çakışmaz.
+    pub label: Option<&'static str>,
+}
+
+pub async fn login_flow_with(
+    app: &AppHandle,
+    url: String,
+    rules: Rules,
+    script: fn(&str) -> String,
+    title: fn(&tauri::Url) -> String,
+    opts: FlowOpts,
+) -> Result<LoginOutcome, LoginError> {
+    let label = opts.label.unwrap_or(LABEL);
+    if let Some(w) = app.get_webview_window(label) {
+        if w.is_visible().unwrap_or(true) {
+            let _ = w.set_focus();
+        } else if label == STEAM_LABEL {
+            let _ = w.close(); // gizli Steam alımı kullanıcıyı engellemesin
+        }
         return Err(LoginError::AlreadyOpen);
     }
     // Her deneme için tek nonce; betik ve her decide çağrısı aynı değeri kullanır.
@@ -80,9 +113,10 @@ pub async fn login_flow(
     let (nonce_nw, app_nw) = (nonce.clone(), app.clone());
 
     let login_url: tauri::Url = url.parse().expect("login url");
-    let window = WebviewWindowBuilder::new(app, LABEL, WebviewUrl::External(login_url.clone()))
+    let builder = WebviewWindowBuilder::new(app, label, WebviewUrl::External(login_url.clone()))
         .title(title(&login_url))
-        .incognito(true)
+        .incognito(opts.data_dir.is_none())
+        .visible(!opts.hidden)
         .initialization_script(script(&nonce))
         .inner_size(520.0, 760.0)
         .on_navigation(move |url| {
@@ -100,7 +134,7 @@ pub async fn login_flow(
                     }
                     let (app, title) = (app_nav.clone(), title(url));
                     tauri::async_runtime::spawn(async move {
-                        if let Some(w) = app.get_webview_window(LABEL) {
+                        if let Some(w) = app.get_webview_window(label) {
                             let _ = w.set_title(&title);
                         }
                     });
@@ -108,7 +142,7 @@ pub async fn login_flow(
                 }
                 NavDecision::Block => {
                     if let Ok(mut s) = blocked_nav.lock() {
-                        s.insert(host);
+                        s.insert(format!("{host}{}", url.path())); // yol (sorgusuz) tanı için
                     }
                     false
                 }
@@ -118,15 +152,18 @@ pub async fn login_flow(
             if decide_with(&url, &nonce_nw, rules) == NavDecision::Allow {
                 let app = app_nw.clone();
                 tauri::async_runtime::spawn(async move {
-                    if let Some(w) = app.get_webview_window(LABEL) {
+                    if let Some(w) = app.get_webview_window(label) {
                         let _ = w.navigate(url);
                     }
                 });
             }
             NewWindowResponse::Deny
-        })
-        .build()
-        .map_err(|e| LoginError::Window(e.to_string()))?;
+        });
+    let builder = match opts.data_dir {
+        Some(d) => builder.data_directory(d),
+        None => builder,
+    };
+    let window = builder.build().map_err(|e| LoginError::Window(e.to_string()))?;
 
     window.on_window_event(move |e| {
         if let WindowEvent::Destroyed = e {
@@ -137,7 +174,7 @@ pub async fn login_flow(
     let res = tauri::async_runtime::spawn_blocking(move || rx.recv_timeout(Duration::from_secs(300)))
         .await
         .map_err(|e| LoginError::Window(e.to_string()))?;
-    if let Some(w) = app.get_webview_window(LABEL) {
+    if let Some(w) = app.get_webview_window(label) {
         let _ = w.close();
     }
     let code = match res {

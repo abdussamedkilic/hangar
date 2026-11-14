@@ -13,6 +13,14 @@ pub struct Collection {
     pub entries: Vec<(Platform, String)>,
 }
 
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub struct SavedFilter {
+    pub id: i64,
+    pub name: String,
+    /// JSON text owned by the UI.
+    pub rule: String,
+}
+
 #[derive(Debug, PartialEq)]
 pub enum NameError {
     Empty,
@@ -163,7 +171,12 @@ impl Db {
                 collection_id INTEGER NOT NULL,
                 platform TEXT NOT NULL,
                 platform_id TEXT NOT NULL,
-                PRIMARY KEY(collection_id, platform, platform_id));",
+                PRIMARY KEY(collection_id, platform, platform_id));
+             CREATE TABLE IF NOT EXISTS filters(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                rule TEXT NOT NULL,
+                position INTEGER NOT NULL);",
         )?;
         // Older DBs lack the column.
         let has_cover: bool = conn
@@ -571,6 +584,56 @@ impl Db {
         Ok(Ok(name.to_string()))
     }
 
+    pub fn filters(&self) -> Result<Vec<SavedFilter>> {
+        let mut st = self.conn.prepare("SELECT id, name, rule FROM filters ORDER BY position, id")?;
+        let rows = st.query_map([], |r| Ok(SavedFilter { id: r.get(0)?, name: r.get(1)?, rule: r.get(2)? }))?;
+        rows.collect()
+    }
+
+    fn check_filter_name(&self, name: &str, except: Option<i64>) -> Result<std::result::Result<String, NameError>> {
+        let name = name.trim();
+        if name.is_empty() {
+            return Ok(Err(NameError::Empty));
+        }
+        let folded = fold_name(name);
+        let mut st = self.conn.prepare("SELECT id, name FROM filters")?;
+        for row in st.query_map([], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?)))? {
+            let (id, other) = row?;
+            if Some(id) != except && fold_name(&other) == folded {
+                return Ok(Err(NameError::Duplicate));
+            }
+        }
+        Ok(Ok(name.to_string()))
+    }
+
+    pub fn create_filter(&self, name: &str, rule: &str) -> Result<std::result::Result<i64, NameError>> {
+        let name = match self.check_filter_name(name, None)? {
+            Ok(n) => n,
+            Err(e) => return Ok(Err(e)),
+        };
+        self.conn.execute(
+            "INSERT INTO filters(name, rule, position)
+             VALUES(?1, ?2, (SELECT COALESCE(MAX(position), 0) + 1 FROM filters))",
+            params![name, rule],
+        )?;
+        Ok(Ok(self.conn.last_insert_rowid()))
+    }
+
+    pub fn update_filter(&self, id: i64, name: &str, rule: &str) -> Result<std::result::Result<(), NameError>> {
+        let name = match self.check_filter_name(name, Some(id))? {
+            Ok(n) => n,
+            Err(e) => return Ok(Err(e)),
+        };
+        self.conn
+            .execute("UPDATE filters SET name = ?1, rule = ?2 WHERE id = ?3", params![name, rule, id])?;
+        Ok(Ok(()))
+    }
+
+    pub fn delete_filter(&self, id: i64) -> Result<()> {
+        self.conn.execute("DELETE FROM filters WHERE id = ?1", [id])?;
+        Ok(())
+    }
+
     pub fn create_collection(&self, name: &str) -> Result<std::result::Result<i64, NameError>> {
         let name = match self.check_collection_name(name, None)? {
             Ok(n) => n,
@@ -975,6 +1038,35 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM collection_entries", [], |r| r.get(0))
             .unwrap();
         assert_eq!(n, 0);
+    }
+
+    #[test]
+    fn filters_crud() {
+        let db = Db::open_in_memory().unwrap();
+        let a = db.create_filter("A", "{}").unwrap().unwrap();
+        let b = db.create_filter("B", "{\"installed\":\"yes\"}").unwrap().unwrap();
+        let got = db.filters().unwrap();
+        assert_eq!(got.iter().map(|f| f.name.as_str()).collect::<Vec<_>>(), ["A", "B"]);
+        assert_eq!(got[1].rule, "{\"installed\":\"yes\"}");
+        assert_eq!(db.update_filter(a, "C", "{\"played\":\"no\"}").unwrap(), Ok(()));
+        assert_eq!(db.update_filter(a, "B", "{}").unwrap(), Err(NameError::Duplicate));
+        assert_eq!(db.update_filter(a, "C", "{}").unwrap(), Ok(()));
+        db.delete_filter(b).unwrap();
+        let left = db.filters().unwrap();
+        assert_eq!(left.len(), 1);
+        assert_eq!((left[0].name.as_str(), left[0].rule.as_str()), ("C", "{}"));
+    }
+
+    #[test]
+    fn filter_names_turkish_fold() {
+        let db = Db::open_in_memory().unwrap();
+        db.create_filter("İndie", "{}").unwrap().unwrap();
+        assert_eq!(db.create_filter("indie", "{}").unwrap(), Err(NameError::Duplicate));
+        db.create_filter("Işık", "{}").unwrap().unwrap();
+        assert_eq!(db.create_filter("ışık", "{}").unwrap(), Err(NameError::Duplicate));
+        assert_eq!(db.create_filter("   ", "{}").unwrap(), Err(NameError::Empty));
+        db.create_filter("  AC  ", "{}").unwrap().unwrap();
+        assert!(db.filters().unwrap().iter().any(|f| f.name == "AC"));
     }
 
     #[test]

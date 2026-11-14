@@ -2,9 +2,19 @@ import type { Collection, Game, Platform, PlatformEntry } from "./api";
 export type { Game, Platform, PlatformEntry } from "./api";
 
 export type Tab = { kind: "all" } | { kind: "platform"; platform: Platform } | { kind: "collection"; id: number };
+export interface FilterRule {
+  stores?: Platform[];
+  installed?: "yes" | "no";
+  played?: "yes" | "no";
+  edition?: "original" | "special";
+  collection?: { id: number; in: boolean };
+}
+export interface SavedFilter { id: number; name: string; rule: FilterRule }
+export type ActiveFilter = { kind: "none" } | { kind: "installed" } | { kind: "saved"; id: number };
+export const NONE: ActiveFilter = { kind: "none" };
 export type Sort = "recent" | "title" | "playtime";
 
-const PLATFORMS: Platform[] = ["steam", "epic", "ubisoft", "gog", "riot", "local"];
+export const PLATFORMS: Platform[] = ["steam", "epic", "ubisoft", "gog", "riot", "local"];
 const SUFFIXES = [
   "ultimate edition", "definitive edition", "game of the year edition", "goty",
   "deluxe edition", "complete edition", "remastered", "director's cut",
@@ -82,11 +92,35 @@ function inTab(g: Game, t: Tab, cols: Collection[]): boolean {
   return c !== undefined && inCollection(g, c);
 }
 
-export function view(games: Game[], t: Tab, installedOnly: boolean, cols: Collection[], q: string, s: Sort): Game[] {
+const hasPlayed = (g: Game) =>
+  g.last_launched != null || g.entries.some((e) => (e.playtime_min ?? 0) > 0 || e.last_played != null);
+
+export function matchesRule(g: Game, r: FilterRule, t: Tab, cols: Collection[]): boolean {
+  if (r.stores?.length && !g.entries.some((e) => r.stores!.includes(e.platform))) return false;
+  if (r.installed && installedIn(g, t) !== (r.installed === "yes")) return false;
+  if (r.played && hasPlayed(g) !== (r.played === "yes")) return false;
+  if (r.edition && g.entries.some((e) => e.edition) !== (r.edition === "special")) return false;
+  if (r.collection) {
+    const c = cols.find((c) => c.id === r.collection!.id);
+    if (c && inCollection(g, c) !== r.collection.in) return false;
+  }
+  return true;
+}
+
+function passes(g: Game, t: Tab, f: ActiveFilter, saved: SavedFilter[], cols: Collection[]): boolean {
+  if (f.kind === "installed") return installedIn(g, t);
+  if (f.kind === "saved") {
+    const s = saved.find((s) => s.id === f.id);
+    return s === undefined || matchesRule(g, s.rule, t, cols);
+  }
+  return true;
+}
+
+export function view(games: Game[], t: Tab, f: ActiveFilter, saved: SavedFilter[], cols: Collection[], q: string, s: Sort): Game[] {
   const nq = normalize(q);
   const out = games
     .map((g) => ({ g, n: normalize(g.title) }))
-    .filter(({ g, n }) => inTab(g, t, cols) && (!installedOnly || installedIn(g, t)) && n.includes(nq));
+    .filter(({ g, n }) => inTab(g, t, cols) && passes(g, t, f, saved, cols) && n.includes(nq));
   const byTitle = (a: { n: string }, b: { n: string }) => cmp(a.n, b.n);
   out.sort((a, b) => {
     if (s === "title") return byTitle(a, b);
@@ -100,8 +134,13 @@ export function view(games: Game[], t: Tab, installedOnly: boolean, cols: Collec
   return out.map(({ g }) => g);
 }
 
-export function tabCounts(games: Game[], installedOnly: boolean, cols: Collection[]) {
-  const n = (t: Tab) => games.filter((g) => inTab(g, t, cols) && (!installedOnly || installedIn(g, t))).length;
+/** Sıralamasız, aramasız sayı (kenar çubuğu sayaçları için). */
+export function filterCount(games: Game[], t: Tab, f: ActiveFilter, saved: SavedFilter[], cols: Collection[]): number {
+  return games.filter((g) => inTab(g, t, cols) && passes(g, t, f, saved, cols)).length;
+}
+
+export function tabCounts(games: Game[], f: ActiveFilter, saved: SavedFilter[], cols: Collection[]) {
+  const n = (t: Tab) => games.filter((g) => inTab(g, t, cols) && passes(g, t, f, saved, cols)).length;
   const platform = {} as Record<Platform, number>;
   for (const p of PLATFORMS) platform[p] = n({ kind: "platform", platform: p });
   const collection: Record<number, number> = {};

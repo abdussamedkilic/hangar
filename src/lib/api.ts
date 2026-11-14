@@ -47,7 +47,7 @@ export interface Candidate {
 export type EntryKey = [Platform, string];
 export interface Collection { id: number; name: string; entries: EntryKey[] }
 export interface ThemeRead { colors: Record<string, string>; warnings: string[] }
-export interface UiPrefs { view: string; tab: string; installed: boolean }
+export interface UiPrefs { view: string; tab: string; installed: boolean; filter: string; sidebar: string }
 
 export interface AccountStatus {
   platform: Platform;
@@ -57,7 +57,7 @@ export interface AccountStatus {
 
 export const api = {
   getLibrary: () => invoke<Game[]>("get_library"),
-  rescan: () => invoke<ScanReport>("rescan"),
+  rescan: (force?: boolean) => invoke<ScanReport>("rescan", { force: !!force }),
   galaxyChangedSinceScan: () => invoke<boolean>("galaxy_changed_since_scan"),
   launch: (gameId: number, platform?: Platform, platformId?: string) => invoke<string>("launch", { gameId, platform, platformId }),
   setPreferred: (gameId: number, platform: Platform, platformId?: string) => invoke<void>("set_preferred", { gameId, platform, platformId }),
@@ -75,7 +75,15 @@ export const api = {
   getAccounts: () => invoke<AccountStatus[]>("get_accounts"),
   connectAccount: (platform: Platform) => invoke<AccountStatus>("connect_account", { platform }),
   disconnectAccount: (platform: Platform) => invoke<boolean>("disconnect_account", { platform }),
+  getGogSource: () => invoke<"galaxy" | "account">("get_gog_source"),
+  setGogSource: (source: "galaxy" | "account") => invoke<void>("set_gog_source", { source }),
+  getSteamAdvanced: () => invoke<{ api_key: string | null; steam_id: string | null }>("get_steam_advanced"),
+  setSteamAdvanced: (apiKey: string | null, steamId: string | null) => invoke<void>("set_steam_advanced", { apiKey, steamId }),
   merge: (a: EntryKey, b: EntryKey) => invoke<ScanReport>("merge_games", { a, b }),
+  getFilters: () => invoke<{ id: number; name: string; rule: string }[]>("get_filters"),
+  createFilter: (name: string, rule: string) => invoke<number>("create_filter", { name, rule }),
+  updateFilter: (id: number, name: string, rule: string) => invoke<void>("update_filter", { id, name, rule }),
+  deleteFilter: (id: number) => invoke<void>("delete_filter", { id }),
   getCollections: () => invoke<Collection[]>("get_collections"),
   createCollection: (name: string) => invoke<number>("create_collection", { name }),
   renameCollection: (id: number, name: string) => invoke<void>("rename_collection", { id, name }),

@@ -24,7 +24,7 @@ export default function GameCard({ game, selected, onSelect, onContext }: Props)
     .map((e) => PLATFORM_NAME[e.platform] + (e.copy ? ` (${e.copy})` : ""))
     .join(", ");
   return (
-    <button className={`card${selected ? " sel" : ""}${isInstalled(game) ? "" : " notinst"}`} onClick={onSelect} aria-pressed={selected}
+    <button draggable onDragStart={(e) => { e.dataTransfer.setData("application/x-hangar-game", String(game.id)); e.dataTransfer.effectAllowed = "copy"; }} className={`card${selected ? " sel" : ""}${isInstalled(game) ? "" : " notinst"}`} onClick={onSelect} aria-pressed={selected}
       onContextMenu={(e) => { if (!onContext) return; e.preventDefault(); onContext(e.clientX, e.clientY); }}>
       <div className="badges">
         <span className="pg" title={tip}>

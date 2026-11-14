@@ -4,11 +4,11 @@ import App from "./App";
 
 const rescan = vi.hoisted(() => vi.fn());
 
-vi.mock("./lib/api", () => ({ api: { getSettings: vi.fn().mockResolvedValue({ steam_api_key: "k", steam_id: null }), getScanFolders: vi.fn().mockResolvedValue([]), rescan: vi.fn().mockResolvedValue({ games: 0, warnings: [] }) } }));
+vi.mock("./lib/api", () => ({ api: { getSettings: vi.fn().mockResolvedValue({ steam_api_key: "k", steam_id: null }), getScanFolders: vi.fn().mockResolvedValue([]), getUiPrefs: vi.fn().mockResolvedValue({ view: "grid", tab: "", installed: false, filter: "", sidebar: "open" }), getAccounts: vi.fn().mockResolvedValue([]), rescan: vi.fn().mockResolvedValue({ games: 0, warnings: [] }) } }));
 
 vi.mock("./state/useLibrary", () => ({
   useLibrary: () => ({
-    games: [], selectedId: null, select: vi.fn(), tab: { kind: "all" }, setTab: vi.fn(), installedOnly: false, setInstalledOnly: vi.fn(), collections: [], reloadCollections: vi.fn(), query: "", setQuery: vi.fn(),
+    games: [], selectedId: null, select: vi.fn(), tab: { kind: "all" }, setTab: vi.fn(), filter: { kind: "none" }, setFilter: vi.fn(), savedFilters: [], reloadFilters: vi.fn(), sidebar: "open", setSidebar: vi.fn(), collections: [], reloadCollections: vi.fn(), query: "", setQuery: vi.fn(),
     sort: "recent", setSort: vi.fn(), warnings: [], rescanning: false, loaded: true, rescan,
   }),
 }));
@@ -31,14 +31,14 @@ test("Yenile sidebar button rescans", async () => {
   render(<App />);
   await act(async () => {});
   fireEvent.click(screen.getByRole("button", { name: "Yenile" }));
-  expect(rescan).toHaveBeenCalled();
+  expect(rescan).toHaveBeenCalledWith(true);
 });
 
-test("settings dialog is not rendered until settings load; Ayarlar retries getSettings", async () => {
+test("Ayarlar opens even when getSettings failed; it retries on open", async () => {
   const { api } = await import("./lib/api");
   vi.mocked(api.getSettings).mockRejectedValueOnce("fail");
   render(<App />);
   fireEvent.click(screen.getByRole("button", { name: "Ayarlar" }));
-  expect(screen.queryByRole("dialog")).toBeNull();
   expect(await screen.findByRole("dialog", { name: "Ayarlar" })).toBeInTheDocument();
+  expect(vi.mocked(api.getSettings).mock.calls.length).toBeGreaterThanOrEqual(2);
 });
