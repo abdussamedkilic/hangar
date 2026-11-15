@@ -101,3 +101,7 @@ src/              React UI (components, lib, state, styles)
 3. Register the new provider in the provider list (`providers`) in `src-tauri/src/commands.rs`.
 4. Add fixture files and tests.
 5. Add the badge label in the UI (`ABBR` in `src/components/GameCard.tsx`, `PLATFORMS` and the filter counters in `src/lib/library.ts`, `Sidebar.tsx`).
+
+## License
+
+MIT. See [LICENSE](LICENSE).
