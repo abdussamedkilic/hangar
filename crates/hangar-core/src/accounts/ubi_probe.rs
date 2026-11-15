@@ -1,5 +1,5 @@
-//! Ubisoft U0 keşfi (yalnızca debug probe kullanır): ağ çağrıları ve yanıt özetleri.
-//! Gizli değerleri (ticket, oturum, kullanıcı) asla Display/log etmez.
+//! Ubisoft U0 discovery (used only by the debug probe): network calls and response summaries.
+//! Never Display's or logs secret values (ticket, session, user).
 
 use crate::accounts::login::UBI_APP_ID;
 use serde_json::Value;
@@ -16,7 +16,7 @@ pub fn game_fields_body() -> String {
     serde_json::json!({"query": "{ __type(name:\"Game\"){ fields { name type { name kind ofType { name } } } } }"}).to_string()
 }
 
-// Hata metnine URL/başlık sızmasın diye yalnızca durum kodu/genel metin.
+// Only the status code / generic text, so no URL or header leaks into the error message.
 fn net_err(e: ureq::Error) -> String {
     match e {
         ureq::Error::Status(c, _) => format!("durum {c}"),
@@ -37,7 +37,7 @@ pub fn graphql(l: &UbiLogin, body: &str) -> Result<String, String> {
     r.into_string().map_err(|_| "yanıt okunamadı".into())
 }
 
-/// Yenileme denemesi; yalnızca HTTP durum metni döner.
+/// Refresh attempt; returns only the HTTP status text.
 pub fn refresh_status(l: &UbiLogin) -> String {
     if l.remember_ticket.is_empty() {
         return "rememberMeTicket yok (atlandı)".into();
@@ -66,7 +66,7 @@ fn has_pc(v: &Value) -> bool {
     }
 }
 
-/// (sahip olunan sayısı, PC sahibi sayısı).
+/// (owned count, PC-owned count).
 pub fn count_owned(body: &str) -> (usize, usize) {
     let v: Value = serde_json::from_str(body).unwrap_or(Value::Null);
     let nodes = v["data"]["viewer"]["ownedGames"]["nodes"].as_array().cloned().unwrap_or_default();
@@ -84,7 +84,7 @@ pub fn field_names(body: &str) -> Vec<String> {
         .collect()
 }
 
-/// Dizindeki dosyaların adı + boyutu (yalnızca okuma).
+/// Name + size of the files in a directory (read-only).
 pub fn list_dir(path: &std::path::Path) -> String {
     match std::fs::read_dir(path) {
         Err(_) => format!("{}: yok/okunamadı", path.display()),

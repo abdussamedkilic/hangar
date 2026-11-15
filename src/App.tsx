@@ -48,7 +48,7 @@ export default function App() {
   }, []);
   useEffect(loadSettings, [loadSettings]);
   useEffect(() => {
-    // Ayarlar açılıp kapanınca (yeni API anahtarı, hesap) ipucunun girdileri tazelenir.
+    // When Settings opens and closes (new API key, account) the hint's inputs are refreshed.
     loadSettings();
     Promise.resolve()
       .then(() => api.getAccounts())
@@ -171,14 +171,13 @@ export default function App() {
       await api.renameCollection(id, name);
       await reloadCollections();
     });
-  const deleteCollection = (c: Collection) => {
-    if (!window.confirm(`“${c.name}” koleksiyonu silinsin mi? Oyunlar kütüphanede kalır.`)) return;
-    void guard(async () => {
+  const deleteCollection = (c: Collection) =>
+    guard(async () => {
+      if (!(await window.confirm(`“${c.name}” koleksiyonu silinsin mi? Oyunlar kütüphanede kalır.`))) return;
       await api.deleteCollection(c.id);
       if (tab.kind === "collection" && tab.id === c.id) setTab({ kind: "all" });
       await reloadCollections();
     });
-  };
   const saveFilter = async (name: string, rule: FilterRule) => {
     const json = JSON.stringify(rule);
     if (filterDlg && filterDlg !== "new") await api.updateFilter(filterDlg.id, name, json);
@@ -190,14 +189,13 @@ export default function App() {
     }
     await reloadFilters();
   };
-  const deleteFilter = (f: SavedFilter) => {
-    if (!window.confirm(`“${f.name}” filtresi silinsin mi?`)) return;
-    void guard(async () => {
+  const deleteFilter = (f: SavedFilter) =>
+    guard(async () => {
+      if (!(await window.confirm(`“${f.name}” filtresi silinsin mi?`))) return;
       await api.deleteFilter(f.id);
       if (filter.kind === "saved" && filter.id === f.id) setFilter(NONE);
       await reloadFilters();
     });
-  };
   const cardEntries = (g: Game): EntryKey[] => g.entries.map((e) => [e.platform, e.platform_id]);
   const dropGame = (collectionId: number, gameId: number) => {
     const g = games.find((x) => x.id === gameId);
@@ -305,7 +303,7 @@ export default function App() {
           />
         )}
       </main>
-      {showSettings && <SettingsDialog sidebar={sidebar} onSidebar={setSidebar} onResetTheme={theme.reset} onScanned={applyReport} onAccountsChanged={(l) => (l ? rescanLabeled(l) : rescan(false))} onClose={closeSettings} />}
+      {showSettings && <SettingsDialog sidebar={sidebar} onSidebar={setSidebar} onThemeChanged={theme.reload} onScanned={applyReport} onAccountsChanged={(l) => (l ? rescanLabeled(l) : rescan(false))} onClose={closeSettings} />}
       {localDlg && <AddGameDialog edit={localDlg === "new" ? undefined : localDlg} onDone={applyReport} onClose={closeLocal} />}
       {ctx && <ContextMenu x={ctx.x} y={ctx.y} onClose={closeCtx} items={cardMenu(ctx.game)} />}
       {tabCtx && <ContextMenu x={tabCtx.x} y={tabCtx.y} onClose={closeTabCtx} items={[{ label: "Yeniden adlandır", onSelect: () => setRenamingId(tabCtx.col.id) }, { label: "Sil", onSelect: () => deleteCollection(tabCtx.col) }]} />}

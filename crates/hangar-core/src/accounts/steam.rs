@@ -1,5 +1,5 @@
-//! Steam hesabı: giriş penceresinin teslim ettiği oyun listesi ve SteamID kimliği.
-//! SteamID ve web erişim anahtarı asla Display/log edilmez.
+//! Steam account: the game list and SteamID delivered by the login window.
+//! The SteamID and web access token are never Display'd or logged.
 
 use super::epic::{AccountState, AccountStatus};
 use super::store::{load_steam_cred, save_steam_cred, SecretStore};

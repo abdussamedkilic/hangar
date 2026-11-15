@@ -9,6 +9,7 @@ vi.mock("./lib/api", () => ({
   api: {
     getSettings: vi.fn().mockResolvedValue({ steam_api_key: "k", steam_id: null }),
     getScanFolders: vi.fn().mockResolvedValue([]),
+    listThemes: vi.fn().mockResolvedValue({ active: "", names: [] }),
     setCover: vi.fn(),
   },
 }));

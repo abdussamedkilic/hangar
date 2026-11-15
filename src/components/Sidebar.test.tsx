@@ -40,3 +40,11 @@ test("Kurulu is builtin and has no context menu", () => {
   fireEvent.contextMenu(screen.getByRole("button", { name: "Bitmemişler" }));
   expect(p.onFilterContext).toHaveBeenCalledWith(saved[0], expect.any(Number), expect.any(Number));
 });
+
+// @ts-expect-error node types are not installed; vitest runs under node
+import { readFileSync } from "node:fs";
+const css: string = readFileSync("src/styles/app.css", "utf8");
+test("grp never scrolls horizontally; collapsed rail hides scrollbar", () => {
+  expect(css).toMatch(/\.grp\{[^}]*overflow-x:hidden/);
+  expect(css).toMatch(/\.collapsed \.grp\{[^}]*scrollbar-width:none/);
+});

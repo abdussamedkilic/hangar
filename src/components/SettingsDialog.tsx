@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { api, type ScanReport } from "../lib/api";
+import { api, type ScanReport, type ThemeList } from "../lib/api";
 import Modal from "./Modal";
 import ScanDialog from "./ScanDialog";
 import AccountsSection from "./AccountsSection";
@@ -8,17 +8,74 @@ import AccountsSection from "./AccountsSection";
 interface Props {
   sidebar: "open" | "collapsed";
   onSidebar?: (v: "open" | "collapsed") => void;
-  onResetTheme?: () => Promise<void>;
+  onThemeChanged?: () => Promise<void>;
   onScanned?: (r: ScanReport) => void;
   onAccountsChanged?: (label?: string) => Promise<void>;
   onClose: () => void;
 }
 
-export default function SettingsDialog({ sidebar, onSidebar, onResetTheme, onScanned, onAccountsChanged, onClose }: Props) {
+export default function SettingsDialog({ sidebar, onSidebar, onThemeChanged, onScanned, onAccountsChanged, onClose }: Props) {
   const [tab, setTab] = useState<"accounts" | "custom">("accounts");
   const [error, setError] = useState<string | null>(null);
   const [folders, setFolders] = useState<string[]>([]);
   const [scanning, setScanning] = useState(false);
+  const [themes, setThemes] = useState<ThemeList>({ active: "", names: [] });
+  const [creating, setCreating] = useState(false);
+  const [newName, setNewName] = useState("");
+
+  useEffect(() => {
+    api.listThemes().then(setThemes).catch((err) => setError(String(err)));
+  }, []);
+
+  const refreshThemes = async () => {
+    setThemes(await api.listThemes());
+    await onThemeChanged?.();
+  };
+
+  const pickTheme = async (name: string) => {
+    try {
+      await api.setActiveTheme(name);
+      await refreshThemes();
+      setError(null);
+    } catch (err) {
+      setError(String(err));
+    }
+  };
+
+  const saveNewTheme = async () => {
+    try {
+      await api.createTheme(newName);
+      await refreshThemes();
+      setCreating(false);
+      setNewName("");
+      setError(null);
+    } catch (err) {
+      setError(String(err));
+    }
+  };
+
+  const removeTheme = async () => {
+    if (!(await window.confirm(`"${themes.active}" teması silinsin mi?`))) return;
+    try {
+      await api.deleteTheme(themes.active);
+      await refreshThemes();
+      setError(null);
+    } catch (err) {
+      setError(String(err));
+    }
+  };
+
+  const nameKey = (e: KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      void saveNewTheme();
+    } else if (e.key === "Escape") {
+      e.stopPropagation();
+      setCreating(false);
+      setNewName("");
+      setError(null);
+    }
+  };
 
   useEffect(() => {
     api.getScanFolders().then(setFolders).catch((err) => setError(String(err)));
@@ -90,11 +147,24 @@ export default function SettingsDialog({ sidebar, onSidebar, onResetTheme, onSca
         </div>
         <div className="settings-panel" role="tabpanel" id="settings-panel-custom" aria-labelledby="settings-tab-custom" hidden={tab !== "custom"}>
           <div className="fld">
-            <span>Tema</span>
+            <label htmlFor="settings-theme">Tema</label>
+            <select id="settings-theme" value={themes.active} onChange={(e) => pickTheme(e.target.value)}>
+              <option value="">Varsayılan</option>
+              {themes.names.map((n) => <option key={n} value={n}>{n}</option>)}
+            </select>
             <div className="row">
-              <button type="button" className="ghost" onClick={() => api.openThemeFile().catch((err) => setError(String(err)))}>Tema dosyasını aç</button>
-              <button type="button" className="ghost" onClick={() => onResetTheme?.().catch((err) => setError(String(err)))}>Varsayılana dön</button>
+              <button type="button" className="ghost" onClick={() => setCreating(true)}>Yeni tema</button>
+              <button type="button" className="ghost" disabled={themes.active === ""} onClick={() => api.openThemeFile().catch((err) => setError(String(err)))}>Dosyayı aç</button>
+              <button type="button" className="ghost" disabled={themes.active === ""} onClick={removeTheme}>Sil</button>
             </div>
+            {creating && (
+              <div className="row">
+                <input aria-label="Tema adı" autoFocus value={newName} onChange={(e) => setNewName(e.target.value)} onKeyDown={nameKey} />
+                <button type="button" className="primary" onClick={saveNewTheme}>Kaydet</button>
+                <button type="button" className="ghost" onClick={() => { setCreating(false); setNewName(""); setError(null); }}>Vazgeç</button>
+              </div>
+            )}
+            <small>Yeni tema, açık olan temanın kopyasıdır. Dosyayı kaydedip uygulamaya dönünce renkler uygulanır.</small>
           </div>
           <div className="fld">
             <span id="settings-sidebar-label">Açılışta menü</span>

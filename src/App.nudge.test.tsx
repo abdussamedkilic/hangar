@@ -11,6 +11,7 @@ vi.mock("./lib/api", () => ({
     getSteamAdvanced: vi.fn().mockResolvedValue({ api_key: null, steam_id: null }),
     getGogSource: vi.fn().mockResolvedValue("galaxy"),
     getScanFolders: vi.fn().mockResolvedValue([]),
+    listThemes: vi.fn().mockResolvedValue({ active: "", names: [] }),
   },
 }));
 vi.mock("./components/GameGrid", () => ({

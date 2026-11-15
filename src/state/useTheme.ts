@@ -22,7 +22,7 @@ export function applyTheme(colors: Record<string, string>, root: HTMLElement, su
 
 const cssSupports = (v: string) => typeof CSS !== "undefined" && CSS.supports("color", v);
 
-export function useTheme(onWarnings: (w: string[]) => void): { reload(): Promise<void>; reset(): Promise<void> } {
+export function useTheme(onWarnings: (w: string[]) => void): { reload(): Promise<void> } {
   const cb = useRef(onWarnings);
   cb.current = onWarnings;
   const last = useRef<string>("");
@@ -44,10 +44,6 @@ export function useTheme(onWarnings: (w: string[]) => void): { reload(): Promise
     }
   }, [apply]);
 
-  const reset = useCallback(async () => {
-    apply(await api.resetTheme());
-  }, [apply]);
-
   useEffect(() => {
     void reload();
     const onFocus = () => void reload();
@@ -55,5 +51,5 @@ export function useTheme(onWarnings: (w: string[]) => void): { reload(): Promise
     return () => window.removeEventListener("focus", onFocus);
   }, [reload]);
 
-  return { reload, reset };
+  return { reload };
 }

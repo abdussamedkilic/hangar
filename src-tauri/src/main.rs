@@ -85,7 +85,10 @@ fn main() {
             collections::set_in_collection,
             collections::get_theme,
             collections::open_theme_file,
-            collections::reset_theme,
+            collections::list_themes,
+            collections::set_active_theme,
+            collections::create_theme,
+            collections::delete_theme,
             collections::get_ui_prefs,
             collections::set_ui_pref,
             ] }
@@ -126,7 +129,10 @@ fn main() {
             collections::set_in_collection,
             collections::get_theme,
             collections::open_theme_file,
-            collections::reset_theme,
+            collections::list_themes,
+            collections::set_active_theme,
+            collections::create_theme,
+            collections::delete_theme,
             collections::get_ui_prefs,
             collections::set_ui_pref,
             ] }

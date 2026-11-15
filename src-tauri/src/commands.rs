@@ -104,7 +104,7 @@ fn scan(app: &AppHandle, steam_pre: Option<(steam_scan::Outcome, u64)>) -> Resul
         }
     });
     let mut owned: OwnedLists = owned.into_iter().map(|r| (Platform::Steam, r)).collect();
-    // Alım sürerken Steam bağlandı/kesildiyse sonuç atılır (önbellek geri gelmesin).
+    // If Steam was connected/disconnected during the fetch, the result is discarded (so the cache does not come back).
     let mut steam_pre = steam_pre.filter(|(_, g)| *g == steam_scan::generation()).map(|(o, _)| o);
     let mut gog_account = false;
     // Epic network calls use their own connection: the shared DB lock is not held.
@@ -236,8 +236,8 @@ fn now_secs() -> i64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs() as i64)
 }
 
-/// Steam bağlıysa ve API anahtarı yoksa tarama öncesi gizli pencereyle listeyi çeker (en fazla 20 sn).
-/// `None` = Steam hesabı yolu kullanılmıyor.
+/// If Steam is connected and there is no API key, fetches the list through a hidden window before scanning (at most 20 s).
+/// `None` = the Steam account path is not used.
 async fn steam_prefetch(app: &AppHandle, force: bool) -> Option<(steam_scan::Outcome, u64)> {
     let a = app.clone();
     let plan = tauri::async_runtime::spawn_blocking(move || {
@@ -247,7 +247,7 @@ async fn steam_prefetch(app: &AppHandle, force: bool) -> Option<(steam_scan::Out
         }
         let go = steam_scan::steam_scan_decision(steam_scan::last_activity(&db), now_secs(), force);
         if go {
-            // Deneme zamanı önceden yazılır: başarısız oturum her taramada pencere açmasın.
+            // The attempt time is written up front so a failed session does not open a window on every scan.
             let _ = db.set_setting(steam_scan::LAST_ATTEMPT_KEY, &now_secs().to_string());
         }
         Some(go)

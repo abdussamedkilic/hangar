@@ -46,6 +46,7 @@ export interface Candidate {
 
 export type EntryKey = [Platform, string];
 export interface Collection { id: number; name: string; entries: EntryKey[] }
+export interface ThemeList { active: string; names: string[] }
 export interface ThemeRead { colors: Record<string, string>; warnings: string[] }
 export interface UiPrefs { view: string; tab: string; installed: boolean; filter: string; sidebar: string }
 
@@ -91,7 +92,10 @@ export const api = {
   setInCollection: (id: number, entries: EntryKey[], member: boolean) => invoke<void>("set_in_collection", { id, entries, member }),
   getTheme: () => invoke<ThemeRead>("get_theme"),
   openThemeFile: () => invoke<void>("open_theme_file"),
-  resetTheme: () => invoke<ThemeRead>("reset_theme"),
+  listThemes: () => invoke<ThemeList>("list_themes"),
+  setActiveTheme: (name: string) => invoke<void>("set_active_theme", { name }),
+  createTheme: (name: string) => invoke<string>("create_theme", { name }),
+  deleteTheme: (name: string) => invoke<void>("delete_theme", { name }),
   getUiPrefs: () => invoke<UiPrefs>("get_ui_prefs"),
   setUiPref: (key: string, value: string) => invoke<void>("set_ui_pref", { key, value }),
 };

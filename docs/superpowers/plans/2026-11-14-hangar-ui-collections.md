@@ -1,185 +1,185 @@
-# Koleksiyonlar, liste görünümü, tema dosyası + küçük açıklar — Implementation Plan
+# Collections, list view, theme file + small gaps — Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:**
-- Steam tarzı elle koleksiyonlar, üstte sekme şeridi, Kart/Liste görünümü, `theme.json` ile renk özelleştirme ve Steam önceliği.
-- Paralelde: CLAUDE.md'deki küçük açıkların bu özelliğe dokunmayanları.
+- Steam-style manual collections, a tab strip at the top, Card/List view, color customization via `theme.json`, and Steam priority.
+- In parallel: the small gaps in CLAUDE.md that do not touch this feature.
 
 **Architecture:**
-- **Çekirdek (hangar-core):**
-  - Koleksiyon tabloları ve CRUD: `db.rs`.
-  - Tema dosyası ayrıştırma ve varsayılan şablon: yeni `theme.rs`.
-  - Steam önceliği: `default_entry`.
-- **Tauri katmanı:** Yeni komutlar ayrı `src-tauri/src/collections.rs` dosyasında; `commands.rs` paralel B izinin dosyası.
-- **Ön yüz:**
-  - Filtre `Tab` + `installedOnly` olarak ikiye ayrılır.
-  - Saf fonksiyonlar `library.ts` içinde.
-  - Yeni bileşenler: `TabStrip`, `GameList`, `useTheme`.
+- **Core (hangar-core):**
+  - Collection tables and CRUD: `db.rs`.
+  - Theme file parsing and default template: new `theme.rs`.
+  - Steam priority: `default_entry`.
+- **Tauri layer:** New commands go in a separate `src-tauri/src/collections.rs` file; `commands.rs` is the file of the parallel Track B.
+- **Front end:**
+  - The filter is split in two as `Tab` + `installedOnly`.
+  - Pure functions in `library.ts`.
+  - New components: `TabStrip`, `GameList`, `useTheme`.
 
-**Tech Stack:** Rust (rusqlite, serde_json), Tauri 2 (`tauri-plugin-opener` mevcut), React 18 + TS, vitest, `@tanstack/react-virtual`.
+**Tech Stack:** Rust (rusqlite, serde_json), Tauri 2 (`tauri-plugin-opener` already present), React 18 + TS, vitest, `@tanstack/react-virtual`.
 
-**Spec:** `docs/superpowers/specs/2026-11-14-hangar-ui-collections-design.md` ("Kurucu kontrolünden sonra netleşenler" bölümü dahil).
+**Spec:** `docs/superpowers/specs/2026-11-14-hangar-ui-collections-design.md` (including the section "Clarified after the founder's check").
 
 ## Global Constraints
-- **UI metni ve commit dili:**
-  - UI metni Türkçe. Commit mesajı Türkçe conventional (`feat(ui): ...`).
-  - Her commit `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` ile biter.
-- **Görsel çizgi:** "Kokpit + Vitrin" tarzı ve `tokens.css` token'ları kullanılır. Yeni sabit renk yazılmaz (`var(--…)` veya `color-mix`). UI işinde design-taste-frontend ve ui-ux-pro-max kurallarına bakılır.
-- **Ayrık dosya sahipliği:**
-  - İz A (Task 1–8): `db.rs`, `theme.rs`, `src-tauri/src/collections.rs`, `main.rs` (yalnızca kayıt), `src/**` (aşağıdaki B dosyaları hariç).
-  - İz B (Task 9): `src-tauri/src/commands.rs`, `local_scan.rs`, `Stage.tsx`, `PlayButton.tsx`, `Modal.tsx`, `README.md`, riot fixture/testleri.
-  - İzler birbirinin dosyasına dokunmaz.
-- **Eski veritabanı:** Yeni tablolar `CREATE TABLE IF NOT EXISTS` ile eklenir; geçiş kodu gerekmez.
-- **Test komutları:** `cargo test -p hangar-core`, `cargo check -p hangar`, `npm test`, `npx tsc --noEmit`. Node PATH'te değilse `bun node_modules/typescript/bin/tsc --noEmit` ve `bunx vitest run`.
-- **Tema anahtarları:** Tam olarak şunlar:
+- **UI text and commit language:**
+  - UI text is Turkish. Commit messages are English conventional (`feat(ui): ...`).
+  - Every commit ends with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
+- **Visual line:** The "Kokpit + Vitrin" style and the `tokens.css` tokens are used. No new hardcoded colors are written (`var(--…)` or `color-mix`). In UI work the design-taste-frontend and ui-ux-pro-max rules are consulted.
+- **Disjoint file ownership:**
+  - Track A (Task 1–8): `db.rs`, `theme.rs`, `src-tauri/src/collections.rs`, `main.rs` (registration only), `src/**` (except the B files below).
+  - Track B (Task 9): `src-tauri/src/commands.rs`, `local_scan.rs`, `Stage.tsx`, `PlayButton.tsx`, `Modal.tsx`, `README.md`, riot fixture/tests.
+  - The tracks do not touch each other's files.
+- **Old database:** New tables are added with `CREATE TABLE IF NOT EXISTS`; no migration code is needed.
+- **Test commands:** `cargo test -p hangar-core`, `cargo check -p hangar`, `npm test`, `npx tsc --noEmit`. If Node is not on PATH, `bun node_modules/typescript/bin/tsc --noEmit` and `bunx vitest run`.
+- **Theme keys:** Exactly these:
   - `background→--bg`, `panel→--panel`, `raised→--raise`, `border→--line`, `text→--fg`
   - `textDim→--dim`, `accent→--accent`, `accentAlt→--accent-alt`, `onAccent→--on-accent`, `installed→--installed`
-  - `_yardım` anahtarı yok sayılır.
-- **Ayar anahtarları:**
-  - `ui.view` = `"grid"|"list"` (varsayılan `grid`)
+  - The `_yardım` key is ignored.
+- **Setting keys:**
+  - `ui.view` = `"grid"|"list"` (default `grid`)
   - `ui.tab` = `"all" | "p:<platform>" | "c:<id>"`
   - `ui.installed` = `"1"|"0"`
 
 ## Review Focus
-1. **Birleştirilmiş kart:** Steam+Ubisoft kartını koleksiyona ekle, sonra ayır. İki kart da koleksiyonda kalır. → Task 1 testi `membership_survives_split_and_merge`.
-2. **Silinen koleksiyon kalıcı sekmede:** Kayıtlı `ui.tab = "c:7"` ve 7 silinmiş. Açılışta `Tümü`. → Task 4 testi `parseTab unknown collection falls back to all`.
-3. **Bozuk tema dosyası:**
-   - Bozuk JSON, `{"accent": 5}` ya da `{"accent": "kırmızımsı"}` arayüzü bozmaz.
-   - Varsayılan renk kalır, tek uyarı görünür.
-   - → Task 2 testleri ve Task 8 testi `invalid color is skipped`.
-4. **Türkçe ad çakışması:** "İndie" ve "indie" aynı ad, "Işık" ve "ışık" aynı ad. Boşluk-yalnız ad reddedilir. → Task 1 testi `collection_names_turkish_fold`.
-5. **Menü pencere kenarında:** Sağ alttaki kartta açılan menü ve alt menü ekran dışına taşmaz. → Task 6 testi `clampMenu keeps menu inside viewport`.
+1. **Merged card:** Add a Steam+Ubisoft card to a collection, then split it. Both cards stay in the collection. → Task 1 test `membership_survives_split_and_merge`.
+2. **Deleted collection on a persistent tab:** Saved `ui.tab = "c:7"` and 7 is deleted. On startup `Tümü`. → Task 4 test `parseTab unknown collection falls back to all`.
+3. **Broken theme file:**
+   - Broken JSON, `{"accent": 5}` or `{"accent": "kırmızımsı"}` does not break the UI.
+   - The default color stays, a single warning is shown.
+   - → Task 2 tests and Task 8 test `invalid color is skipped`.
+4. **Turkish name collision:** "İndie" and "indie" are the same name, "Işık" and "ışık" are the same name. A whitespace-only name is rejected. → Task 1 test `collection_names_turkish_fold`.
+5. **Menu at the window edge:** The menu and submenu opened on a card at the bottom right do not overflow the screen. → Task 6 test `clampMenu keeps menu inside viewport`.
 
 ---
 
-## İz A — Özellik (sırayla)
+## Track A — Feature (in order)
 
-### Task 1: Koleksiyon verisi (core)
+### Task 1: Collection data (core)
 
 **Files:**
-- Modify: `crates/hangar-core/src/db.rs` (şema `init` ~95-128; yeni yöntemler; testler dosya sonunda)
+- Modify: `crates/hangar-core/src/db.rs` (schema `init` ~95-128; new methods; tests at the end of the file)
 
 **Interfaces:**
 - Produces:
   - `#[derive(Serialize, Clone, Debug, PartialEq)] pub struct Collection { pub id: i64, pub name: String, pub entries: Vec<(Platform, String)> }`
-  - `pub fn fold_name(s: &str) -> String` (trim + Türkçe küçük harf: `İ→i`, `I→ı`, diğerleri `to_lowercase`)
-  - `Db::collections(&self) -> Result<Vec<Collection>>` — `position` artan.
+  - `pub fn fold_name(s: &str) -> String` (trim + Turkish lowercase: `İ→i`, `I→ı`, others `to_lowercase`)
+  - `Db::collections(&self) -> Result<Vec<Collection>>` — `position` ascending.
   - `Db::create_collection(&self, name: &str) -> Result<Result<i64, NameError>>`
   - `Db::rename_collection(&self, id: i64, name: &str) -> Result<Result<(), NameError>>`
-  - `Db::delete_collection(&self, id: i64) -> Result<()>` (üyelikleri de siler)
+  - `Db::delete_collection(&self, id: i64) -> Result<()>` (also deletes memberships)
   - `Db::set_in_collection(&self, id: i64, entries: &[(Platform, String)], member: bool) -> Result<()>`
   - `#[derive(Debug, PartialEq)] pub enum NameError { Empty, Duplicate }`
-  - `Result` = mevcut rusqlite `Result`.
+  - `Result` = the existing rusqlite `Result`.
 
-- [ ] **Step 1: Failing tests (`db.rs` tests modülü)**
-  - `collections_crud`: Oluşturma sırası korunur. Eski ada rename, kendi adına dönmek dahil, `Ok(Ok(()))`. Delete, koleksiyonu ve `collection_entries` satırlarını siler.
+- [ ] **Step 1: Failing tests (`db.rs` tests module)**
+  - `collections_crud`: Creation order is kept. Renaming to the old name, including going back to its own name, is `Ok(Ok(()))`. Delete removes the collection and the `collection_entries` rows.
   - `collection_names_turkish_fold`:
-    - `create("İndie")` sonra `create("indie")` → `Duplicate`.
-    - `create("Işık")` sonra `create("ışık")` → `Duplicate`.
+    - `create("İndie")` then `create("indie")` → `Duplicate`.
+    - `create("Işık")` then `create("ışık")` → `Duplicate`.
     - `create("   ")` → `Empty`.
-    - `create("  AC  ")` adı `"AC"` olarak saklar.
+    - `create("  AC  ")` stores the name as `"AC"`.
   - `membership_survives_split_and_merge`:
-    - Tek kartta `steam:1` + `ubisoft:541` (`one_card` yardımcısı) koleksiyona iki kaydıyla eklenir.
-    - Ardından `split`/override + `scan_all` benzeri yeniden yazma yapılır.
-    - `collections()[0].entries` iki kaydı da içerir.
-  - `rescan_keeps_membership`: Kütüphaneden düşen kaydın üyelik satırı silinmez.
-  - `set_in_collection_idempotent`: Aynı kaydı iki kez eklemek tek satır bırakır. `member=false` kartın tüm kayıtlarını siler.
+    - A single card with `steam:1` + `ubisoft:541` (`one_card` helper) is added to the collection with its two entries.
+    - Then a `split`/override + `scan_all`-like rewrite is done.
+    - `collections()[0].entries` contains both entries.
+  - `rescan_keeps_membership`: The membership row of an entry that drops out of the library is not deleted.
+  - `set_in_collection_idempotent`: Adding the same entry twice leaves one row. `member=false` deletes all entries of the card.
 
-- [ ] **Step 2:** `cargo test -p hangar-core collection` → FAIL (tanımsız).
+- [ ] **Step 2:** `cargo test -p hangar-core collection` → FAIL (undefined).
 
 - [ ] **Step 3: Implement**
-  - Şema:
+  - Schema:
     - `collections(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, position INTEGER NOT NULL, created_at INTEGER NOT NULL)`
     - `collection_entries(collection_id INTEGER NOT NULL, platform TEXT NOT NULL, platform_id TEXT NOT NULL, PRIMARY KEY(collection_id, platform, platform_id))`
-  - Yeni `position` = `COALESCE(MAX(position),0)+1`.
-  - Tekillik `fold_name` ile Rust'ta kontrol edilir; tüm adlar okunup karşılaştırılır.
-  - Tarama kodu bu tablolara dokunmaz.
+  - New `position` = `COALESCE(MAX(position),0)+1`.
+  - Uniqueness is checked in Rust with `fold_name`; all names are read and compared.
+  - Scan code does not touch these tables.
 
-- [ ] **Step 4:** `cargo test -p hangar-core` → PASS (tüm testler).
+- [ ] **Step 4:** `cargo test -p hangar-core` → PASS (all tests).
 
 - [ ] **Step 5: Commit**
-  - `feat(core): elle koleksiyonlar (kayıt anahtarıyla üyelik)`
+  - `feat(core): manual collections (membership by entry key)`
 
-### Task 2: Tema dosyası + Steam önceliği (core)
+### Task 2: Theme file + Steam priority (core)
 
 **Files:**
 - Create: `crates/hangar-core/src/theme.rs`
 - Modify: `crates/hangar-core/src/lib.rs` (`pub mod theme;`)
-- Modify: `crates/hangar-core/src/db.rs` (`default_entry` ~64-82 ve `default_entry_rules` testi ~745)
+- Modify: `crates/hangar-core/src/db.rs` (`default_entry` ~64-82 and the `default_entry_rules` test ~745)
 
 **Interfaces:**
 - Produces:
-  - `pub const KEYS: [(&str, &str); 10]` (JSON adı, CSS değişkeni; Global Constraints'teki sırayla)
-  - `#[derive(Serialize, Debug, PartialEq, Default)] pub struct ThemeRead { pub colors: BTreeMap<String, String>, pub warnings: Vec<String> }` — `colors` CSS değişkeni → ham değer.
+  - `pub const KEYS: [(&str, &str); 10]` (JSON name, CSS variable; in the order from Global Constraints)
+  - `#[derive(Serialize, Debug, PartialEq, Default)] pub struct ThemeRead { pub colors: BTreeMap<String, String>, pub warnings: Vec<String> }` — `colors` CSS variable → raw value.
   - `pub fn parse(text: &str) -> ThemeRead`
-  - `pub fn default_file() -> String` — 10 anahtarın tamamı `tokens.css` değerleriyle, artı `"_yardım"` dizisi (her anahtar için bir Türkçe satır).
-  - `pub fn read_file(path: &Path) -> ThemeRead` — dosya yoksa boş `ThemeRead` döner, uyarı yok.
+  - `pub fn default_file() -> String` — all 10 keys with the `tokens.css` values, plus a `"_yardım"` array (one Turkish line for each key).
+  - `pub fn read_file(path: &Path) -> ThemeRead` — if the file does not exist an empty `ThemeRead` is returned, no warning.
 
 - [ ] **Step 1: Failing tests (`theme.rs`)**
   - `default_matches_tokens_css`:
-    - `include_str!("../../../src/styles/tokens.css")` içindeki 10 değişkenin değeri okunur.
-    - `parse(&default_file()).colors` ile birebir eşit, `warnings` boş.
+    - The values of the 10 variables in `include_str!("../../../src/styles/tokens.css")` are read.
+    - Exactly equal to `parse(&default_file()).colors`, `warnings` empty.
   - `unknown_key_and_non_string_warn`:
     - `{"accent":"#fff","foo":"#000","text":5}` → `colors == {"--accent":"#fff"}`.
-    - İki uyarı var; biri "foo", diğeri "text" içerir.
-  - `broken_json`: `"{"` → `colors` boş, 1 uyarı (`"Tema dosyası okunamadı"` ile başlar).
-  - `help_key_ignored`: `{"_yardım":["x"]}` → uyarı yok.
+    - There are two warnings; one contains "foo", the other "text".
+  - `broken_json`: `"{"` → `colors` empty, 1 warning (starts with `"Tema dosyası okunamadı"`).
+  - `help_key_ignored`: `{"_yardım":["x"]}` → no warning.
 
-- [ ] **Step 2: Failing test (`db.rs`):** `default_entry_rules` güncellenir.
-  - Installed Steam(10) + GOG(20) → Steam kazanır.
-  - Installed GOG(10) + Epic(20), Steam yok → Epic kazanır (son oynanan).
-  - İki installed Steam → son oynanan Steam.
-  - Tercih (`preferred`) varsa o kazanır (mevcut davranış).
+- [ ] **Step 2: Failing test (`db.rs`):** `default_entry_rules` is updated.
+  - Installed Steam(10) + GOG(20) → Steam wins.
+  - Installed GOG(10) + Epic(20), no Steam → Epic wins (last played).
+  - Two installed Steam → the last played Steam.
+  - If there is a preference (`preferred`) it wins (existing behavior).
 
 - [ ] **Step 3:** Test → FAIL.
 
 - [ ] **Step 4: Implement**
   - `theme.rs`:
-    - Renk sözdizimini Rust doğrulamaz; ön yüz `CSS.supports` ile doğrular.
-    - Uyarı metinleri Türkçe ve kısa: `Tema: bilinmeyen anahtar "foo"`, `Tema: "text" metin olmalı`.
-  - `default_entry`: Installed kayıtlar içinde Steam varsa en son oynanan Steam seçilir. Yoksa mevcut "en son oynanan" kuralı uygulanır.
+    - Rust does not validate color syntax; the front end validates with `CSS.supports`.
+    - Warning texts are Turkish and short: `Tema: bilinmeyen anahtar "foo"`, `Tema: "text" metin olmalı`.
+  - `default_entry`: If Steam is among the installed entries, the last played Steam is chosen. Otherwise the existing "last played" rule applies.
 
 - [ ] **Step 5:** `cargo test -p hangar-core` → PASS.
 
 - [ ] **Step 6: Commit**
-  - `feat(core): tema dosyası ayrıştırma ve Steam önceliği`
+  - `feat(core): theme file parsing and Steam priority`
 
-### Task 3: Tauri komutları + api.ts
+### Task 3: Tauri commands + api.ts
 
 **Files:**
 - Create: `src-tauri/src/collections.rs`
-- Modify: `src-tauri/src/main.rs` (`mod collections;` + iki handler listesine kayıt)
+- Modify: `src-tauri/src/main.rs` (`mod collections;` + registration in two handler lists)
 - Modify: `src/lib/api.ts`
 
 **Interfaces:**
-- Consumes: Task 1–2 API'leri. `Dbs`, `lock` gibi mevcut yardımcıların kullanımı `commands.rs`'teki kalıpla aynı. Bu dosyalar `pub(crate)` ise yeniden kullanılır; değilse yalnızca `commands.rs`'te görünürlük değişikliği yapılabilir.
-- Produces (Rust komut → TS):
-  - `get_collections() -> Vec<Collection>` → `api.getCollections(): Promise<Collection[]>`. TS tipi `interface Collection { id: number; name: string; entries: EntryKey[] }`.
-  - `create_collection(name) -> i64` → `api.createCollection(name): Promise<number>`. Hata metinleri:
+- Consumes: Task 1–2 APIs. The use of existing helpers like `Dbs`, `lock` is the same as the pattern in `commands.rs`. If these are `pub(crate)` they are reused; if not, only a visibility change in `commands.rs` may be made.
+- Produces (Rust command → TS):
+  - `get_collections() -> Vec<Collection>` → `api.getCollections(): Promise<Collection[]>`. TS type `interface Collection { id: number; name: string; entries: EntryKey[] }`.
+  - `create_collection(name) -> i64` → `api.createCollection(name): Promise<number>`. Error texts:
     - `NameError::Empty` → `"Koleksiyon adı boş olamaz"`
     - `Duplicate` → `"Bu adda bir koleksiyon zaten var"`
   - `rename_collection(id, name)` → `api.renameCollection(id, name): Promise<void>`
   - `delete_collection(id)` → `api.deleteCollection(id): Promise<void>`
   - `set_in_collection(id, entries: Vec<(Platform,String)>, member: bool)` → `api.setInCollection(id, entries: EntryKey[], member: boolean): Promise<void>`
   - `get_theme() -> ThemeRead` → `api.getTheme(): Promise<{ colors: Record<string,string>; warnings: string[] }>`
-    - Dosya: `app_data_dir()/theme.json`.
+    - File: `app_data_dir()/theme.json`.
   - `open_theme_file()` → `api.openThemeFile(): Promise<void>`
-    - Dosya yoksa `default_file()` yazılır, sonra `tauri-plugin-opener` ile varsayılan düzenleyicide açılır.
+    - If the file does not exist `default_file()` is written, then it is opened in the default editor with `tauri-plugin-opener`.
   - `reset_theme() -> ThemeRead` → `api.resetTheme()`
-    - `default_file()` yazılır ve okunarak döner.
+    - `default_file()` is written and returned after reading.
   - `get_ui_prefs() -> UiPrefs { view: String, tab: String, installed: bool }` → `api.getUiPrefs()`
-    - Varsayılanlar: `grid`, `all`, `false`.
+    - Defaults: `grid`, `all`, `false`.
   - `set_ui_pref(key: String, value: String)` → `api.setUiPref(key, value)`
-    - Yalnızca `ui.view`, `ui.tab`, `ui.installed` kabul edilir; diğerleri `Err("Bilinmeyen ayar")`.
+    - Only `ui.view`, `ui.tab`, `ui.installed` are accepted; others `Err("Bilinmeyen ayar")`.
 
-- [ ] **Step 1:** Komutları yaz ve iki handler listesine (debug + release) kaydet.
-- [ ] **Step 2:** `cargo check -p hangar` ve `cargo check -p hangar --release` → PASS.
+- [ ] **Step 1:** Write the commands and register them in the two handler lists (debug + release).
+- [ ] **Step 2:** `cargo check -p hangar` and `cargo check -p hangar --release` → PASS.
 - [ ] **Step 3:** `npx tsc --noEmit` → PASS.
 - [ ] **Step 4: Commit**
-  - `feat(app): koleksiyon, tema ve görünüm tercihi komutları`
+  - `feat(app): collection, theme and view preference commands`
 
-### Task 4: Filtre modeli (`library.ts`)
+### Task 4: Filter model (`library.ts`)
 
 **Files:**
 - Modify: `src/lib/library.ts`, `src/lib/library.test.ts`
@@ -189,76 +189,76 @@
 - Produces:
   - `export type Tab = { kind: "all" } | { kind: "platform"; platform: Platform } | { kind: "collection"; id: number };`
   - `export function tabKey(t: Tab): string` → `"all" | "p:steam" | "c:12"`
-  - `export function parseTab(s: string | null, cols: Collection[]): Tab` — bilinmeyen ya da silinmiş → `{kind:"all"}`.
-  - `export function inCollection(g: Game, c: Collection): boolean` — kartın herhangi bir kaydı `c.entries` içindeyse.
-  - `export function installedIn(g: Game, t: Tab): boolean` — platform sekmesinde `entries.some(e => e.platform === p && e.installed)`, diğer sekmelerde `isInstalled(g)`.
-  - `export function view(games: Game[], t: Tab, installedOnly: boolean, cols: Collection[], q: string, s: Sort): Game[]` — sıralama ve arama mantığı aynen.
+  - `export function parseTab(s: string | null, cols: Collection[]): Tab` — unknown or deleted → `{kind:"all"}`.
+  - `export function inCollection(g: Game, c: Collection): boolean` — if any entry of the card is in `c.entries`.
+  - `export function installedIn(g: Game, t: Tab): boolean` — on a platform tab `entries.some(e => e.platform === p && e.installed)`, on other tabs `isInstalled(g)`.
+  - `export function view(games: Game[], t: Tab, installedOnly: boolean, cols: Collection[], q: string, s: Sort): Game[]` — sorting and search logic as is.
   - `export function tabCounts(games: Game[], installedOnly: boolean, cols: Collection[]): { all: number; platform: Record<Platform, number>; collection: Record<number, number> }`
-  - `export function installedCount(games: Game[], t: Tab, cols: Collection[]): number` — kenar çubuğundaki "Kurulu" sayacı.
-  - Eski `Filter` ve `counts` kaldırılır; tüm kullanım yerleri sonraki task'larda değişir.
+  - `export function installedCount(games: Game[], t: Tab, cols: Collection[]): number` — the "Kurulu" counter in the sidebar.
+  - The old `Filter` and `counts` are removed; all use sites change in later tasks.
 
 - [ ] **Step 1: Failing tests (`library.test.ts`)**
-  - `ubisoft tab + installed excludes steam-installed merged card`: Watch_Dogs `steam` kurulu + `ubisoft` kurulu değil.
-    - `view(…, {platform:"ubisoft"}, true, …)` boş.
-    - `{platform:"steam"}` ile 1.
-    - `{kind:"all"}` ile 1.
+  - `ubisoft tab + installed excludes steam-installed merged card`: Watch_Dogs `steam` installed + `ubisoft` not installed.
+    - `view(…, {platform:"ubisoft"}, true, …)` empty.
+    - 1 with `{platform:"steam"}`.
+    - 1 with `{kind:"all"}`.
   - `merged card counts in both store tabs`
   - `collection tab filters by any entry`
   - `parseTab unknown collection falls back to all`: `parseTab("c:7", [])` → `{kind:"all"}`. `parseTab("p:xbox", [])` → `{kind:"all"}`.
   - `tabCounts respects installedOnly`
-  - Mevcut sıralama ve arama testleri yeni imzayla aynı sonuçları verir.
+  - Existing sorting and search tests give the same results with the new signature.
 
 - [ ] **Step 2:** `npm test -- library` → FAIL.
 - [ ] **Step 3:** Implement.
 - [ ] **Step 4:** `npm test -- library` → PASS.
 - [ ] **Step 5: Commit**
-  - `feat(ui): sekme + kurulu filtre modeli`
+  - `feat(ui): tab + installed filter model`
 
-### Task 5: Sekme şeridi, kenar çubuğu, durum ve kalıcılık
+### Task 5: Tab strip, sidebar, state and persistence
 
 **Files:**
 - Create: `src/components/TabStrip.tsx`, `src/components/TabStrip.test.tsx`
 - Modify: `src/components/Sidebar.tsx`, `src/state/useLibrary.ts`, `src/App.tsx`, `src/styles/app.css`
 
 **Interfaces:**
-- Consumes: Task 3 API'leri, Task 4 fonksiyonları.
+- Consumes: Task 3 APIs, Task 4 functions.
 - Produces:
-  - `useLibrary` dönüşüne eklenir, `filter`/`setFilter` yerine geçer:
+  - Added to the `useLibrary` return, replacing `filter`/`setFilter`:
     - `tab`, `setTab(t: Tab)`
     - `installedOnly`, `setInstalledOnly(b: boolean)`
     - `collections: Collection[]`, `reloadCollections(): Promise<void>`
-  - `setTab` ve `setInstalledOnly` ayarı `api.setUiPref` ile yazar. Açılışta `getUiPrefs` + `getCollections` → `parseTab`.
+  - `setTab` and `setInstalledOnly` write the setting with `api.setUiPref`. On startup `getUiPrefs` + `getCollections` → `parseTab`.
   - `TabStrip` props:
     - `{ tab, counts: ReturnType<typeof tabCounts>, collections, installedOnly, onTab(t), onClearInstalled(), onCreate(name): Promise<void>, onTabContext(c: Collection, x, y) }`
   - `Sidebar` props:
-    - `filter/counts/onFilter` yerine `installedOnly`, `installedCount`, `onToggleInstalled`.
-    - `onSettings`, `onRescan`, `onAdd`, `rescanning` aynı kalır.
+    - `installedOnly`, `installedCount`, `onToggleInstalled` instead of `filter/counts/onFilter`.
+    - `onSettings`, `onRescan`, `onAdd`, `rescanning` stay the same.
 
 - [ ] **Step 1: Failing tests (`TabStrip.test.tsx`)**
-  - Sıra: `Tümü`, sonra yalnızca sayısı >0 olan mağazalar, sonra ayraç (`role="separator"`), sonra koleksiyonlar (0 olsa da görünür), sonra `+`.
-  - `+` tıklanınca bir textbox açılır. Enter → `onCreate("AC")`. Esc → kapanır, çağrı yok. Boş Enter → çağrı yok.
-  - `installedOnly` iken "Kurulu ✕" etiketi görünür ve tıklanınca `onClearInstalled`.
-  - Aktif sekmede `aria-selected="true"`.
+  - Order: `Tümü`, then only stores with a count >0, then a separator (`role="separator"`), then collections (visible even at 0), then `+`.
+  - Clicking `+` opens a textbox. Enter → `onCreate("AC")`. Esc → closes, no call. Empty Enter → no call.
+  - When `installedOnly` the label "Kurulu ✕" is visible and clicking it calls `onClearInstalled`.
+  - `aria-selected="true"` on the active tab.
 
 - [ ] **Step 2:** FAIL.
 
 - [ ] **Step 3: Implement**
-  - **Şerit:** Tek satır, `overflow-x: auto`.
-  - **Kenar çubuğu:** Mağaza grubu kaldırılır. "Kurulu" artık bir anahtar (`aria-pressed`) ve sayacı var.
+  - **Strip:** Single row, `overflow-x: auto`.
+  - **Sidebar:** The store group is removed. "Kurulu" is now a toggle (`aria-pressed`) and has a counter.
   - **App:**
-    - Aktif sekmenin sayısı 0 olup sekme gizlenirse `Tümü`'ne geçilir.
-    - Koleksiyon sekmesinin sağ tık menüsünde "Yeniden adlandır" ve "Sil" olur.
-      - Yeniden adlandır: satır içi alan; TabStrip'e `renamingId` prop'u eklenebilir.
-      - Sil: `window.confirm("“X” koleksiyonu silinsin mi? Oyunlar kütüphanede kalır.")`.
-      - Aktif koleksiyon silinirse `Tümü`.
-    - API hataları mevcut `setError` notice'ine düşer.
-  - **Boş durum metni:** "Hiç oyun bulunamadı. Steam, Epic, GOG, Ubisoft ya da Riot kurulu mu? Elle eklemek için “Oyun ekle”yi kullan."
+    - If the active tab's count is 0 and the tab is hidden, switch to `Tümü`.
+    - The collection tab's right-click menu has "Yeniden adlandır" and "Sil".
+      - Rename: inline field; a `renamingId` prop may be added to TabStrip.
+      - Delete: `window.confirm("“X” koleksiyonu silinsin mi? Oyunlar kütüphanede kalır.")`.
+      - If the active collection is deleted, `Tümü`.
+    - API errors fall into the existing `setError` notice.
+  - **Empty state text:** "Hiç oyun bulunamadı. Steam, Epic, GOG, Ubisoft ya da Riot kurulu mu? Elle eklemek için “Oyun ekle”yi kullan."
 
-- [ ] **Step 4:** `npm test` ve `npx tsc --noEmit` → PASS.
+- [ ] **Step 4:** `npm test` and `npx tsc --noEmit` → PASS.
 - [ ] **Step 5: Commit**
-  - `feat(ui): sekme şeridi ve koleksiyon sekmeleri`
+  - `feat(ui): tab strip and collection tabs`
 
-### Task 6: Bağlam menüsü alt menü + kenara sığdırma + koleksiyona ekle
+### Task 6: Context menu submenu + fit to edge + add to collection
 
 **Files:**
 - Modify: `src/components/ContextMenu.tsx`, `src/App.tsx`, `src/styles/app.css`
@@ -267,123 +267,123 @@
 **Interfaces:**
 - Produces:
   - `export type MenuItem = { label: string; onSelect?: () => void; checked?: boolean; items?: MenuItem[] }`
-    - `items` olan öğe alt menü açar (hover/→ ve tıklama).
+    - An item with `items` opens a submenu (hover/→ and click).
   - `export function clampMenu(x: number, y: number, w: number, h: number, vw: number, vh: number): { x: number; y: number }`
-  - `ContextMenu` props: `{ x, y, items: MenuItem[], onClose }`. Ölçüm sonrası `clampMenu` uygulanır. Alt menü sağa sığmazsa sola açılır.
+  - `ContextMenu` props: `{ x, y, items: MenuItem[], onClose }`. `clampMenu` is applied after measuring. If the submenu does not fit on the right it opens to the left.
 
 - [ ] **Step 1: Failing tests**
   - `clampMenu keeps menu inside viewport`:
     - `clampMenu(790, 590, 200, 150, 800, 600)` → `{x: 590, y: 440}`.
-    - İçerideki nokta değişmez.
-    - Negatif sonuç 0'a kırpılır.
+    - A point inside is unchanged.
+    - A negative result is clipped to 0.
   - `submenu item toggles`:
-    - "Koleksiyona ekle ›" altında `checked` öğe `aria-checked="true"`.
-    - Tıklanınca `onSelect` çağrılır ve menü kapanır.
+    - Under "Koleksiyona ekle ›" a `checked` item has `aria-checked="true"`.
+    - On click `onSelect` is called and the menu closes.
 
 - [ ] **Step 2:** FAIL.
 
 - [ ] **Step 3: Implement**
-  - App'teki kart menüsüne "Koleksiyona ekle ›" eklenir. Alt menüde her koleksiyon `checked: inCollection(g,c)` ile listelenir. Tıklanınca kartın tüm kayıtlarıyla `setInCollection(c.id, entries, !checked)`, ardından `reloadCollections()`.
-  - Alt menünün sonunda "Yeni koleksiyon…" olur: `window.prompt("Koleksiyon adı")` → `createCollection` → kartı ekle → `reloadCollections`. Aktif sekme değişmez.
+  - "Koleksiyona ekle ›" is added to the card menu in App. In the submenu each collection is listed with `checked: inCollection(g,c)`. On click `setInCollection(c.id, entries, !checked)` with all entries of the card, then `reloadCollections()`.
+  - At the end of the submenu there is "Yeni koleksiyon…": `window.prompt("Koleksiyon adı")` → `createCollection` → add the card → `reloadCollections`. The active tab does not change.
 
 - [ ] **Step 4:** `npm test` → PASS.
 - [ ] **Step 5: Commit**
-  - `feat(ui): koleksiyona ekle alt menüsü, menü kenara sığar`
+  - `feat(ui): add-to-collection submenu, menu fits to edge`
 
-### Task 7: Liste görünümü
+### Task 7: List view
 
 **Files:**
 - Create: `src/components/GameList.tsx`, `src/components/GameList.test.tsx`
-- Modify: `src/App.tsx`, `src/components/TabStrip.tsx` (sağda görünüm anahtarı), `src/state/useLibrary.ts` (`viewMode`, `setViewMode` → `ui.view`), `src/styles/app.css`
+- Modify: `src/App.tsx`, `src/components/TabStrip.tsx` (view switch on the right), `src/state/useLibrary.ts` (`viewMode`, `setViewMode` → `ui.view`), `src/styles/app.css`
 
 **Interfaces:**
 - Produces:
-  - `GameList` props, `GameGrid` ile aynı: `{ games, selectedId, onSelect, onContext(g, x, y), onLaunch(g) }`.
-  - `onLaunch`, kartın `currentEntry`'si üzerinden mevcut `launch` akışını kullanır.
+  - `GameList` props, same as `GameGrid`: `{ games, selectedId, onSelect, onContext(g, x, y), onLaunch(g) }`.
+  - `onLaunch` uses the existing `launch` flow via the card's `currentEntry`.
   - `viewMode: "grid" | "list"`.
 
 - [ ] **Step 1: Failing tests (`GameList.test.tsx`)**
-  - Satırda ad, mağaza rozetleri (Steam ilk), "Kurulu"/"Kurulu değil" ve oynama süresi görünür. Süre `playtime_min` toplamı; 0 ise "—"; `12 sa` biçimi.
-  - Düğme "Oyna" ya da "Kur" der.
-  - Sağ tık `onContext`, tık `onSelect` çağırır.
+  - The row shows the name, store badges (Steam first), "Kurulu"/"Kurulu değil" and playtime. The time is the sum of `playtime_min`; "—" if 0; in the format `12 sa`.
+  - The button says "Oyna" or "Kur".
+  - Right-click calls `onContext`, click calls `onSelect`.
 
 - [ ] **Step 2:** FAIL.
 
 - [ ] **Step 3: Implement**
-  - `@tanstack/react-virtual` ile sabit satır yüksekliği. Kapak `Cover` bileşeniyle küçük boy.
-  - Görünüm anahtarı TabStrip'in sağında iki ikonlu düğme (`aria-pressed`).
+  - Fixed row height with `@tanstack/react-virtual`. The cover is small, using the `Cover` component.
+  - The view switch is a two-icon button (`aria-pressed`) to the right of TabStrip.
 
 - [ ] **Step 4:** `npm test`, `npx tsc --noEmit` → PASS.
 - [ ] **Step 5: Commit**
-  - `feat(ui): liste görünümü`
+  - `feat(ui): list view`
 
-### Task 8: Temanın uygulanması + Ayarlar düğmeleri
+### Task 8: Applying the theme + Settings buttons
 
 **Files:**
 - Create: `src/state/useTheme.ts`, `src/state/useTheme.test.ts`
-- Modify: `src/App.tsx`, `src/components/SettingsDialog.tsx`, `src/styles/tokens.css` / `app.css` (accent'ten türetilmiş sabit rgba renkleri `color-mix(in srgb, var(--accent) N%, transparent)` yapılır)
+- Modify: `src/App.tsx`, `src/components/SettingsDialog.tsx`, `src/styles/tokens.css` / `app.css` (hardcoded rgba colors derived from the accent become `color-mix(in srgb, var(--accent) N%, transparent)`)
 
 **Interfaces:**
 - Produces:
   - `export function applyTheme(colors: Record<string,string>, root: HTMLElement, supports: (v: string) => boolean): string[]`
-    - Önce 10 değişkenin inline değerini temizler, sonra geçerli olanları `setProperty` ile yazar.
-    - Geçersiz değerler için uyarı döner: `Tema: "--accent" geçersiz renk`.
+    - First clears the inline values of the 10 variables, then writes the valid ones with `setProperty`.
+    - Returns a warning for invalid values: `Tema: "--accent" geçersiz renk`.
   - `export function useTheme(onWarnings: (w: string[]) => void): { reload(): Promise<void>; reset(): Promise<void> }`
-    - Açılışta ve her `window` focus'unda `api.getTheme()` çağırır. Galaxy 10 sn sınırından bağımsızdır.
-    - Uyarı listesi bir öncekiyle aynıysa `onWarnings` çağrılmaz.
+    - Calls `api.getTheme()` on startup and on every `window` focus. It is independent of the Galaxy 10 s limit.
+    - If the warning list is the same as the previous one, `onWarnings` is not called.
 
 - [ ] **Step 1: Failing tests (`useTheme.test.ts`)**
   - `invalid color is skipped`: `applyTheme({"--accent":"kırmızımsı","--bg":"#000"}, el, v => v.startsWith("#"))`.
-    - `--bg` yazılır, `--accent` yazılmaz.
-    - 1 uyarı döner.
-  - `reapply clears previous overrides`: İkinci çağrıda olmayan değişken inline'dan silinir.
+    - `--bg` is written, `--accent` is not written.
+    - 1 warning is returned.
+  - `reapply clears previous overrides`: On the second call a variable that is no longer present is removed from inline.
 
 - [ ] **Step 2:** FAIL.
 
 - [ ] **Step 3: Implement**
-  - App, `useTheme` uyarılarını mevcut `warnings`/`notice` satırına ekler.
-  - SettingsDialog'a "Görünüm" bölümü eklenir:
+  - App adds the `useTheme` warnings to the existing `warnings`/`notice` line.
+  - An "Görünüm" section is added to SettingsDialog:
     - "Tema dosyasını aç" → `api.openThemeFile()`
     - "Varsayılana dön" → `reset()`
 
 - [ ] **Step 4:** `npm test`, `npx tsc --noEmit`, `cargo check -p hangar` → PASS.
 - [ ] **Step 5: Commit**
-  - `feat(ui): tema dosyası uygulanır`
+  - `feat(ui): theme file is applied`
 
-## İz B — Küçük açıklar (Task 1–8 ile paralel, tek alt ajan)
+## Track B — Small gaps (parallel with Task 1–8, a single subagent)
 
-### Task 9: Bilinen küçük açıklar
+### Task 9: Known small gaps
 
-**Files:** yalnızca İz B dosyaları (Global Constraints). Her madde ayrı commit, `fix(...)`.
+**Files:** only Track B files (Global Constraints). Each item is a separate commit, `fix(...)`.
 
-- [ ] **9a — Başlatma betiği** (`src-tauri/src/commands.rs` ~240-246):
-  - Argüman tırnaklanırken `"` öncesindeki `\` dizileri çiftlenir (Windows CommandLineToArgvW kuralı); sondaki `\` dizisi de çiftlenir.
-  - Saf bir `fn quote_arg(s: &str) -> String` yazılır.
-  - Testler: `quote_arg(r#"a\"b"#) == r#""a\\\"b""#`, `quote_arg(r"C:\dir\") == r#""C:\dir\\""#`, `quote_arg("plain") == "plain"`.
-- [ ] **9b — Tarama hariç tutması** (`crates/hangar-core/src/local_scan.rs` ~10-20):
-  - `crash` yalnızca dosya adı `crash` içerir ve aynı zamanda `handler|report|pad` içerirse elenir.
-  - `unins` önek eşleşmesi olur.
-  - Testler: `CrashBandicoot.exe` elenmez; `UnityCrashHandler64.exe` ve `unins000.exe` elenir; `MyUninstaller.exe` elenmez.
-- [ ] **9c — Bozuk `scan_folders` JSON'u** (`commands.rs` `scan_folders_of` ~439):
-  - Ayrıştırma hatasında boş liste yerine `Err("Tarama klasörleri okunamadı; Ayarlar'dan yeniden seç")` döner. Bu hata `get_scan_folders` ve tarama uyarısına taşınır.
-  - Test: bozuk değerde `get_scan_folders` `Err` döner.
-- [ ] **9d — Riot PBE fixture'ı:** Mevcut ama kullanılmayan PBE fixture'ı için Riot sağlayıcı testi eklenir. PBE kurulumu ayrı bir kayıt olarak algılanmalı ya da beklenen davranışa göre elenmeli; mevcut kodun davranışını sabitleyen bir test yeterli.
-- [ ] **9e — "Kaldır" onayı** (`src/components/Stage.tsx` ~109):
-  - `window.confirm("“<ad>” Hangar'dan kaldırılsın mı? Oyun dosyaları silinmez.")` iptal edilirse `onRemove` çağrılmaz.
-  - Vitest testi.
-- [ ] **9f — Eksik exe'li yerel kart** (`src/components/PlayButton.tsx`):
-  - Yerel kaydın exe'si yoksa etiket "Kur · Yerel" yerine "Exe bulunamadı · Yerel" olur ve düğme devre dışı kalır.
-  - Mevcut PlayButton testlerine bir vaka eklenir.
-- [ ] **9g — Ayarlar penceresinde odak tuzağı** (`src/components/Modal.tsx`):
-  - Tab ve Shift+Tab modal içinde döner.
-  - Test: son öğede Tab → ilk öğe.
-- [ ] **9h — README:** "Steam API anahtarı" bölümüne SteamID notu eklenir: kullanıcı adı yerine 17 haneli SteamID64 ya da boş bırakılabilir; boşsa `loginusers.vdf`'ten alınır.
-- [ ] **Doğrulama:** `cargo test -p hangar-core`, `cargo check -p hangar`, `npm test`, `npx tsc --noEmit` → PASS.
+- [ ] **9a — Launch script** (`src-tauri/src/commands.rs` ~240-246):
+  - When quoting an argument, runs of `\` before `"` are doubled (Windows CommandLineToArgvW rule); a trailing run of `\` is also doubled.
+  - A pure `fn quote_arg(s: &str) -> String` is written.
+  - Tests: `quote_arg(r#"a\"b"#) == r#""a\\\"b""#`, `quote_arg(r"C:\dir\") == r#""C:\dir\\""#`, `quote_arg("plain") == "plain"`.
+- [ ] **9b — Scan exclusion** (`crates/hangar-core/src/local_scan.rs` ~10-20):
+  - `crash` is excluded only if the file name contains `crash` and also contains `handler|report|pad`.
+  - `unins` becomes a prefix match.
+  - Tests: `CrashBandicoot.exe` is not excluded; `UnityCrashHandler64.exe` and `unins000.exe` are excluded; `MyUninstaller.exe` is not excluded.
+- [ ] **9c — Broken `scan_folders` JSON** (`commands.rs` `scan_folders_of` ~439):
+  - On a parse error, instead of an empty list `Err("Tarama klasörleri okunamadı; Ayarlar'dan yeniden seç")` is returned. This error is carried to `get_scan_folders` and the scan warning.
+  - Test: with a broken value `get_scan_folders` returns `Err`.
+- [ ] **9d — Riot PBE fixture:** A Riot provider test is added for the existing but unused PBE fixture. A PBE install should be detected as a separate entry or be excluded according to the expected behavior; a test that pins the current code's behavior is enough.
+- [ ] **9e — "Kaldır" confirmation** (`src/components/Stage.tsx` ~109):
+  - If `window.confirm("“<ad>” Hangar'dan kaldırılsın mı? Oyun dosyaları silinmez.")` is cancelled, `onRemove` is not called.
+  - Vitest test.
+- [ ] **9f — Local card with a missing exe** (`src/components/PlayButton.tsx`):
+  - If the local entry's exe is missing, the label becomes "Exe bulunamadı · Yerel" instead of "Kur · Yerel" and the button is disabled.
+  - A case is added to the existing PlayButton tests.
+- [ ] **9g — Focus trap in the Settings window** (`src/components/Modal.tsx`):
+  - Tab and Shift+Tab cycle inside the modal.
+  - Test: Tab on the last item → the first item.
+- [ ] **9h — README:** A SteamID note is added to the "Steam API anahtarı" section: instead of a username, the 17-digit SteamID64 or leave it empty; if empty it is taken from `loginusers.vdf`.
+- [ ] **Verification:** `cargo test -p hangar-core`, `cargo check -p hangar`, `npm test`, `npx tsc --noEmit` → PASS.
 
 ---
 
-## Son
-- Tüm-dal Opus incelemesi yapılır.
-- Kullanıcıyla canlı kontrol: spec'teki 6 adımlık "Canlı" listesi.
-- `CLAUDE.md` güncellenir: kapanan açıklar silinir.
+## Finish
+- A whole-branch Opus review is done.
+- Live check with the user: the 6-step "Live" list in the spec.
+- `CLAUDE.md` is updated: closed gaps are deleted.
 - Squash merge PR.

@@ -363,7 +363,7 @@ mod tests {
         assert_eq!(c["game1"].title, "Death's Door");
         assert!(!c["dlc1"].is_game && !c["extra1"].is_game && !c["app1"].is_game);
     }
-    /// Canlı yanıtlar yalnızca kullanıcının PC'sinde durur; `HANGAR_EPIC_LIVE_DIR` yoksa test atlanır.
+    /// Live responses stay only on the user's PC; the test is skipped when `HANGAR_EPIC_LIVE_DIR` is unset.
     fn live_files(prefix: &str) -> Option<Vec<(u32, String)>> {
         let dir = std::path::PathBuf::from(std::env::var_os("HANGAR_EPIC_LIVE_DIR")?);
         let mut v: Vec<(u32, String)> = std::fs::read_dir(dir)
@@ -416,7 +416,7 @@ mod tests {
         assert_eq!(e.install_uri.as_deref(), Some("com.epicgames.launcher://apps/ns%3Acid%3AFig?action=install"));
     }
 
-    // ---- EpicClient akışı ----
+    // ---- EpicClient flow ----
     use super::super::store::{load_cred, save_cred, MemoryStore};
     use super::super::StoredCred;
     use crate::db::Db;

@@ -16,7 +16,7 @@
 - A launch string containing `://` is a URI; anything else is an exe path launched with `launch_args`, working directory = the exe's folder.
 - No new features beyond the spec; no Astryx/React 19; UI copy in Turkish.
 - Before the first run that creates `local_games`, copy `%APPDATA%\com.hangar.app\hangar.db` to `hangar.db.bak-v1` (manual, once).
-- One task = one branch commit series; after each task: `cargo test -p hangar-core`, `npx tsc --noEmit`, `npx vitest run`, then the user tries it in `npm run tauri dev`. Commit messages: Turkish conventional (`feat(core): ...`).
+- One task = one branch commit series; after each task: `cargo test -p hangar-core`, `npx tsc --noEmit`, `npx vitest run`, then the user tries it in `npm run tauri dev`. Commit messages: English conventional (`feat(core): ...`).
 - npm/npx are only on PATH in PowerShell after `fnm env --shell powershell | Out-String | Invoke-Expression`.
 
 ## Review Focus
@@ -60,9 +60,9 @@
 - [ ] **Step 4: `commands::launch`.** Match `launch_target(entry, &uri)`: `Uri` → opener as today; `Exe` → if `!path.exists()` return `Err("Oyun dosyası bulunamadı".into())`; else `std::process::Command::new(&path).args(&args).current_dir(<exe folder>).spawn()`; if the error's `raw_os_error() == Some(740)` (elevation required) retry via `powershell -NoProfile -Command Start-Process -FilePath '<path>' -ArgumentList <args> -WorkingDirectory '<dir>' -Verb RunAs` (single quotes in values doubled). Other errors → `Err(format!("Açılamadı: {e}"))`. `record_launch` stays as is.
 - [ ] **Step 5: UI types.** `Platform` union + `PLATFORMS` + `ABBR` + `PLAT` per Global Constraints. Sidebar shows a platform row only when its count > 0 for the new three (Steam/Epic/Ubisoft rows unchanged).
 - [ ] **Step 6:** `cargo test -p hangar-core`, `cargo check -p hangar`, `npx tsc --noEmit`, `npx vitest run` → all PASS.
-- [ ] **Step 7: Commit** `feat(core): gog/riot/yerel platformları ve exe ile başlatma`
+- [ ] **Step 7: Commit** `feat(core): gog/riot/local platforms and exe launching`
 
-### Task 2: Oyun ekle (manual local games)
+### Task 2: Add Game (manual local games)
 
 **Files:**
 - Modify: `crates/hangar-core/src/db.rs` (table + CRUD)
@@ -80,7 +80,7 @@
 - [ ] **Step 4: UI test** (`AddGameDialog.test.tsx`, dialog plugin mocked): choosing `C:\Games\Hades\Hades.exe` pre-fills name `Hades`; "Ekle" calls `api.addLocalGame("Hades", "C:\\Games\\Hades\\Hades.exe")`; empty name disables "Ekle".
 - [ ] **Step 5: Implement UI.** Sidebar button "Oyun ekle" (above "Yenile"); dialog via existing `Modal`: "Exe seç" (dialog `open({ filters: [{ name: "Oyun", extensions: ["exe"] }] })`), "Ad", "Ekle"/"Vazgeç". Name suggestion: exe file name without extension. Stage "…" menu for games with a local entry: "Düzenle" (same dialog, prefilled, calls update) and "Kaldır" (calls remove). Results flow into the existing `notice`/library refresh like `rescan`.
 - [ ] **Step 6:** all checks PASS; user adds any exe in `tauri dev`, plays it, edits, removes, presses Yenile.
-- [ ] **Step 7: Commit** `feat: oyun ekle (elle yerel oyun), düzenle ve kaldır`
+- [ ] **Step 7: Commit** `feat: add game (manual local game), edit and remove`
 
 ### Task 3: Riot provider
 
@@ -95,7 +95,7 @@
 - [ ] **Step 1: Failing tests.** `product_title("league_of_legends","live") == Some("League of Legends")`, `("teamfighttactics","live") → "Teamfight Tactics"`, `("valorant","live") → "VALORANT"`, `("league_of_legends","pbe") → "League of Legends (PBE)"`, `("bacon","live") → None`; fixture JSON → `"C:/Riot Games/Riot Client/RiotClientServices.exe"`; YAML → `"C:/Riot Games/League of Legends"`; `with_root(temp)` where only the LoL live install dir exists → exactly one entry with the args above; root with no `RiotClientInstalls.json` → `scan()` returns `Ok(vec![])`.
 - [ ] **Step 2:** run → FAIL. **Step 3:** implement (line-based YAML read, no new crate). **Step 4:** PASS.
 - [ ] **Step 5:** user check: League of Legends and Teamfight Tactics cards appear; Oyna opens Riot Client and starts LoL.
-- [ ] **Step 6: Commit** `feat(core): riot oyunları (league of legends, tft)`
+- [ ] **Step 6: Commit** `feat(core): riot games (league of legends, tft)`
 
 ### Task 4: Folder scan suggestions
 
@@ -112,13 +112,13 @@
 - [ ] **Step 2:** FAIL. **Step 3:** implement. **Step 4:** PASS.
 - [ ] **Step 5: UI.** Settings gets "Oyun klasörleri": list with "Kaldır", "Klasör ekle" (dialog `open({ directory: true })`), "Klasörleri tara" → `ScanDialog`: checklist (all ticked by default, names editable), "Seçilenleri ekle"; zero candidates → text `Bulunamadı — Oyun ekle ile elle ekleyebilirsin.` Test: two candidates, untick one, submit → `api.addLocalGames` called with the ticked one only.
 - [ ] **Step 6:** checks PASS; user picks a real games folder; list holds no setup/redist tools; an added game launches.
-- [ ] **Step 7: Commit** `feat: seçili klasörlerde oyun önerisi taraması`
+- [ ] **Step 7: Commit** `feat: game suggestion scan in selected folders`
 
 ### Task 5: GOG provider
 
 **Files:**
 - Create: `crates/hangar-core/src/providers/gog.rs`; Modify: `providers/mod.rs`, `src-tauri/src/commands.rs`
-- Modify: `CLAUDE.md` (status: GOG "doğrulanmadı" until a real game is tried)
+- Modify: `CLAUDE.md` (status: GOG "unverified" until a real game is tried)
 
 **Interfaces:**
 - Produces: `pub struct GogRecord { pub game_id: String, pub name: String, pub path: String, pub exe: String }`; `pub fn entries_from(records: Vec<GogRecord>, galaxy: Option<&Path>) -> Vec<PlatformEntry>`; `GogProvider::detect()` reads `HKLM\SOFTWARE\WOW6432Node\GOG.com\Games\*` (`gameID`, `gameName`, `path`, `exe`) and `...\GOG.com\GalaxyClient\paths\client`; no Games key → `Ok(vec![])`.
@@ -126,5 +126,5 @@
 
 - [ ] **Step 1: Failing tests** for `entries_from`: with Galaxy path → args exactly as above; without → `launch_uri == exe`; record with empty `name` skipped.
 - [ ] **Step 2:** FAIL. **Step 3:** implement. **Step 4:** PASS.
-- [ ] **Step 5:** update `CLAUDE.md` (Step 1 status, GOG unverified; v1.1 ideas list → done items), commit `feat(core): gog oyunları (doğrulanmadı)`.
+- [ ] **Step 5:** update `CLAUDE.md` (Step 1 status, GOG unverified; v1.1 ideas list → done items), commit `feat(core): gog games (unverified)`.
 - [ ] **Step 6:** open PR `feat/step1` → `main`, squash merge after the user's final check.

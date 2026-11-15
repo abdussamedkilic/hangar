@@ -1,4 +1,4 @@
-//! Epic giriş penceresi için saf gezinme kuralları (Tauri'siz).
+//! Pure navigation rules for the Epic login window (no Tauri).
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum NavDecision {
@@ -7,13 +7,13 @@ pub enum NavDecision {
     Block,
 }
 
-/// Gezinme kuralları: `(host, tam_host, yol_önekleri)`. `tam_host` true ise yalnızca o host,
-/// false ise host ve alt alan adları; önek listesi boşsa her yol, doluysa yol bu öneklerden biriyle
-/// başlamalı. Epic + captcha (alt alanlarıyla, her yol); Google/Apple/Microsoft giriş hostları
-/// (tam host, her yol); Sony hesabı (alt alanlarıyla, her yol); Nintendo (tam host, her yol);
-/// Steam yalnızca `/openid/` ve `/login/`; Facebook (www/m/web) yalnızca giriş/yetki/doğrulama yolları ve `/v<sürüm>/dialog/oauth`.
-/// Yol önekleri bölüm sınırında eşleşir (`/login` = `/login` veya `/login/...`); açık port her zaman engellenir.
-/// Sitenin geri kalanı engellenir. Geri dönüş nonce'la bağlı olduğundan izinli sayfalar kod enjekte edemez.
+/// Navigation rules: `(host, exact_host, path_prefixes)`. If `exact_host` is true only that host
+/// matches, otherwise the host and its subdomains; an empty prefix list allows every path, otherwise
+/// the path must start with one of the prefixes. Epic + captcha (with subdomains, any path); Google/Apple/Microsoft
+/// login hosts (exact host, any path); Sony account (with subdomains, any path); Nintendo (exact host, any path);
+/// Steam only `/openid/` and `/login/`; Facebook (www/m/web) only login/authorize/checkpoint paths and `/v<version>/dialog/oauth`.
+/// Path prefixes match on a segment boundary (`/login` = `/login` or `/login/...`); an explicit port is always blocked.
+/// The rest of the site is blocked. The callback is bound to a nonce, so allowed pages cannot inject code.
 pub const NAV_RULES: &[(&str, bool, &[&str])] = &[
     ("epicgames.com", false, &[]),
     ("hcaptcha.com", false, &[]),
@@ -48,7 +48,7 @@ fn is_facebook(host: &str) -> bool {
     matches!(host, "www.facebook.com" | "m.facebook.com" | "web.facebook.com")
 }
 
-/// Ubisoft Connect girişi (U0 keşfi): tam konak connect/account.ubisoft.com + captcha; port yok, yalnızca https.
+/// Ubisoft Connect login (U0 discovery): exact hosts connect/account.ubisoft.com + captcha; no port, https only.
 pub const UBI_NAV_RULES: &[(&str, bool, &[&str])] = &[
     ("connect.ubisoft.com", true, &[]),
     ("account.ubisoft.com", true, &[]),
@@ -57,7 +57,7 @@ pub const UBI_NAV_RULES: &[(&str, bool, &[&str])] = &[
     ("funcaptcha.com", false, &[]),
 ];
 
-/// Ubisoft Connect web uygulaması kimliği (dönebilir; tek yerde dursun).
+/// Ubisoft Connect web app id (may rotate; keep it in one place).
 pub const UBI_APP_ID: &str = "82b650c0-6cb3-40c0-9f41-25a53b62b206";
 /// Ubisoft Connect PC launcher app id. The demux service only accepts tickets issued for it, while the
 /// web login page only accepts `UBI_APP_ID`. An `rm_v1` refresh with this id converts the web
@@ -71,7 +71,7 @@ pub fn ubi_login_url() -> String {
     )
 }
 
-/// GOG girişi (G0 keşfi): giriş + captcha; `embed.gog.com` yalnızca `/on_login_success` (kod yakalama sayfası).
+/// GOG login (G0 discovery): login + captcha; `embed.gog.com` only `/on_login_success` (code capture page).
 pub const GOG_NAV_RULES: &[(&str, bool, &[&str])] = &[
     ("auth.gog.com", true, &[]),
     ("login.gog.com", true, &[]),
@@ -88,7 +88,7 @@ pub fn gog_login_url() -> String {
     )
 }
 
-/// `embed.gog.com/on_login_success` sayfasında `code` parametresini nonce'lu geri dönüşle yollar.
+/// On the `embed.gog.com/on_login_success` page, sends the `code` parameter back via the nonce'd callback.
 pub fn gog_init_script(nonce: &str) -> String {
     assert!(
         nonce.len() == 32 && nonce.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')),
@@ -108,7 +108,7 @@ pub fn gog_window_title(url: &url::Url) -> String {
     format!("GOG girişi — {}", url.host_str().unwrap_or(""))
 }
 
-/// Steam girişi (S0 keşfi): tam konaklar, port yok, yalnızca https; captcha konakları alt alanlarıyla.
+/// Steam login (S0 discovery): exact hosts, no port, https only; captcha hosts with subdomains.
 pub const STEAM_NAV_RULES: &[(&str, bool, &[&str])] = &[
     ("steamcommunity.com", true, &[]),
     ("store.steampowered.com", true, &[]),
@@ -130,9 +130,9 @@ pub fn steam_window_title(url: &url::Url) -> String {
     format!("Steam girişi — {}", url.host_str().unwrap_or(""))
 }
 
-/// Gizli Steam alımında betiğin "giriş yok" teslim süresi (ms); Rust zaman aşımından kısa olmalı.
+/// Delay (ms) before the script reports "not logged in" during a hidden Steam fetch; must be shorter than the Rust timeout.
 pub const STEAM_HIDDEN_NOLOGIN_MS: u64 = 12000;
-/// Gizli Steam alımı için Rust tarafı zaman aşımı (sn).
+/// Rust-side timeout (s) for a hidden Steam fetch.
 pub const STEAM_HIDDEN_TIMEOUT_SECS: u64 = 20;
 
 const STEAM_SCRIPT: &str = r#"(function(){try{
@@ -198,9 +198,9 @@ const STEAM_SCRIPT: &str = r#"(function(){try{
   setInterval(tick, 500);
 }catch(e){}})();"#;
 
-/// Steam girişi: giriş (id / `data-userinfo`) görününce mağazaya geçer; mağaza sayfasındaki web
-/// erişim anahtarıyla aynı sayfadan `GetOwnedGames` çağrılır. Teslim: `{games,steamid,name}`,
-/// `{nologin:true}` veya `{failed}`; anahtar asla teslim edilmez. Girişten sonra 20 sn içinde teslim eder.
+/// Steam login: once the login (id / `data-userinfo`) shows up, moves to the store; `GetOwnedGames` is
+/// called from the same page using the web access token on the store page. Delivers `{games,steamid,name}`,
+/// `{nologin:true}` or `{failed}`; the token is never delivered. Delivers within 20 s after login.
 pub fn steam_init_script(nonce: &str) -> String {
     assert!(
         nonce.len() == 32 && nonce.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')),
@@ -209,7 +209,7 @@ pub fn steam_init_script(nonce: &str) -> String {
     STEAM_SCRIPT.replace("__NONCE__", nonce).replace("__NOLOGIN_MS__", &STEAM_HIDDEN_NOLOGIN_MS.to_string()).replace("__HIDDEN__", "false")
 }
 
-/// Sessiz yenileme: girişli oturum yoksa ~20 sn içinde `{nologin:true}` teslim eder.
+/// Silent refresh: if there is no logged-in session, delivers `{nologin:true}` within ~20 s.
 pub fn steam_init_script_hidden(nonce: &str) -> String {
     steam_init_script(nonce).replacen("var HIDDEN = false;", "var HIDDEN = true;", 1)
 }
@@ -231,9 +231,9 @@ fn nav_allowed_with(url: &url::Url, rules: &[(&str, bool, &[&str])]) -> bool {
         })
 }
 
-/// Her giriş denemesi için bir kez üretilen anti-CSRF etiketi (gizli anahtar değil).
-/// Yakalama adresi bu etiketi taşımıyorsa kabul edilmez; böylece izinli bir sayfa
-/// kendi kodunu enjekte edemez.
+/// Anti-CSRF tag generated once per login attempt (not a secret key).
+/// A capture URL that does not carry this tag is rejected, so an allowed page
+/// cannot inject its own code.
 pub fn new_nonce() -> String {
     use std::collections::hash_map::RandomState;
     use std::hash::BuildHasher;
@@ -249,7 +249,7 @@ pub fn new_nonce() -> String {
     format!("{hi:016x}{lo:016x}")
 }
 
-/// `nonce` [0-9a-f]{32} olmalı; aksi halde panikler (JS enjeksiyonunu önler).
+/// `nonce` must be [0-9a-f]{32}; otherwise panics (prevents JS injection).
 pub fn init_script(nonce: &str) -> String {
     assert!(
         nonce.len() == 32 && nonce.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')),
@@ -269,8 +269,8 @@ pub fn init_script(nonce: &str) -> String {
     )
 }
 
-/// Ubisoft girişi için betik: `connect.ubisoft.com` üst çerçevesinde localStorage'ı yoklar;
-/// `PRODloginData` içinde `ticket` görününce JSON'u nonce'lu geri dönüş adresiyle yollar.
+/// Ubisoft login script: polls localStorage in the `connect.ubisoft.com` top frame;
+/// when `ticket` appears in `PRODloginData`, sends the JSON to the nonce'd callback URL.
 pub fn ubi_init_script(nonce: &str) -> String {
     assert!(
         nonce.len() == 32 && nonce.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')),

@@ -1,65 +1,65 @@
-# Hangar — Ubisoft tam sahiplik listesi (demux) · Kısa tasarım
+# Hangar — Ubisoft full ownership list (demux) · Short design
 
-Tarih: 2026-11-14 · Durum: kullanıcı onayladı ("Evet, geç")
-Dayanak: `2026-11-14-hangar-ubisoft-account-design.md` (bağlantı, DPAPI, güvenlik kuralları aynen geçerli).
+Date: 2026-11-14 · Status: approved by the user ("Yes, go ahead")
+Basis: `2026-11-14-hangar-ubisoft-account-design.md` (connection, DPAPI and security rules apply as is).
 
-## Sorun
-GraphQL (`games(filterBy:{isOwned:true})`) yalnızca hesapta etkinleştirilmiş/oynanmış 4 oyunu döndürüyor. Çekilişle alınan AC Origins ve AC Syndicate gelmiyor.
+## Problem
+GraphQL (`games(filterBy:{isOwned:true})`) returns only the 4 games activated/played on the account. AC Origins and AC Syndicate, obtained through a giveaway, do not come.
 
-## Canlı denemede doğrulananlar (2026-11-14, kullanıcının hesabı)
-- Demux (`dmx.upc.ubisoft.com:443`, TLS 1.2, 4 bayt BE uzunluk + protobuf; YoobieRE/ubisoft-demux-node şemaları) `ownership_service` → `InitializeRsp` ile 313 kayıt döndürdü. `owned=true` ve `product_type=0` olan 7 kayıt tam olarak beklenen liste: 420 Far Cry 4, 541 Watch_Dogs, 857 AC Unity, 1875 AC Syndicate, 3539 AC Origins, 5092 AC Odyssey, 5184 AC III Remastered.
-- Demux yalnızca **Ubisoft Connect PC uygulama kimliğiyle** (`f68a4bb5-608a-4ff2-8123-be8ef797e0a6`) alınmış bileti kabul ediyor; web kimliğiyle (`82b650c0-…`) alınan bilet "reddedildi (expired:false, banned:false)".
-- Giriş sayfası PC kimliğini kabul etmiyor (ERROR). Ama web girişinden gelen `rememberMeTicket` ile PC kimliğinde `rm_v1` yenilemesi (`rememberMe:true`) çalışıyor ve yeni bir PC belgesi veriyor; bu belge kendi başına art arda yenilenebiliyor. GraphQL de PC kimliğiyle aynı 4 oyunu döndürüyor.
-- Bu çevirme web belgesini geçersiz kılıyor (sonraki web yenilemesi 401). Önceki denemede kayıtlı bağlantının bozulma nedeni buydu.
-- Sunucu TLS el sıkışmasını sık sık hemen kesiyor (UnexpectedEof); birkaç denemede bağlanıyor. `clientVersion` olarak kurulu `upc.exe` yapı numarası 13416 kabul edildi.
-- Demux `product_id` = kayıt defterindeki kurulu Ubisoft kimliği (541 Watch_Dogs) ve `ubiservices_space_id` = GraphQL `spaceId`.
+## Verified in the live trial (2026-11-14, the user's account)
+- Demux (`dmx.upc.ubisoft.com:443`, TLS 1.2, 4-byte BE length + protobuf; YoobieRE/ubisoft-demux-node schemas) returned 313 records through `ownership_service` → `InitializeRsp`. The 7 records with `owned=true` and `product_type=0` are exactly the expected list: 420 Far Cry 4, 541 Watch_Dogs, 857 AC Unity, 1875 AC Syndicate, 3539 AC Origins, 5092 AC Odyssey, 5184 AC III Remastered.
+- Demux accepts only a ticket obtained with the **Ubisoft Connect PC application id** (`f68a4bb5-608a-4ff2-8123-be8ef797e0a6`); a ticket obtained with the web id (`82b650c0-…`) is "rejected (expired:false, banned:false)".
+- The sign-in page does not accept the PC id (ERROR). But an `rm_v1` refresh (`rememberMe:true`) with the PC id, using the `rememberMeTicket` from the web sign-in, works and gives a new PC token; this token can then be refreshed repeatedly on its own. GraphQL also returns the same 4 games with the PC id.
+- This conversion invalidates the web token (the next web refresh gives 401). This was why the saved connection broke in the earlier trial.
+- The server often cuts the TLS handshake immediately (UnexpectedEof); it connects within a few attempts. The installed `upc.exe` build number 13416 was accepted as `clientVersion`.
+- Demux `product_id` = the installed Ubisoft id in the registry (541 Watch_Dogs) and `ubiservices_space_id` = GraphQL `spaceId`.
 
-## Tasarım
-**Kimlikler:** Giriş penceresi web kimliğiyle kalır (`UBI_APP_ID`). Tüm API çağrıları (yenileme, GraphQL, oturum kapatma) yeni sabit `UBI_LAUNCHER_APP_ID` ile yapılır.
+## Design
+**Ids:** The sign-in window stays with the web id (`UBI_APP_ID`). All API calls (refresh, GraphQL, ending the session) are made with the new constant `UBI_LAUNCHER_APP_ID`.
 
-**Bağlanma:** `connect` girişten gelen web `rememberMeTicket`'ı bir kez PC kimliğiyle yeniler. Dönen PC belgesi kaydedilir; web belgesi saklanmaz. Belge biçimi `v: 2` olur. `v: 1` dosyası okunamaz sayılır ve kullanıcı bağlı görünmez; yeniden bağlanması gerekir. Mevcut belge bu PC'de zaten geçersiz.
+**Connecting:** `connect` refreshes the web `rememberMeTicket` from sign-in once with the PC id. The returned PC token is saved; the web token is not stored. The token format becomes `v: 2`. A `v: 1` file counts as unreadable and the user does not appear connected; they need to reconnect. The existing token is already invalid on this PC.
 
-**Tarama (`fetch_owned`):**
-1. Yenile (PC kimliği, kalıcı rotasyon kuralları aynı).
-2. Demux: sahip olunan ürünler, yalnızca `owned == true && product_type == 0`.
-3. GraphQL (PC kimliği, en iyi çaba): `spaceId → (name, coverUrl)` haritası.
-4. Kayıt: `platform_id = product_id`, `launch_uri = install_uri = uplay://launch/<product_id>/0`.
-   - Başlık: GraphQL adı (space_id ile), yoksa yapılandırma YAML'ındaki ad. Ad yerelleştirme anahtarıysa (`GAMENAME`, `l1` gibi) `localizations: default:` altındaki karşılığına bakılır. Ad çözülemezse kayıt atlanır.
-   - Kapak: GraphQL `coverUrl`, yoksa YAML `thumb_image` dosya adından `https://ubistatic3-a.akamaihd.net/orbit/uplay_launcher_3_0/assets/<dosya>`. Bu host kapak izin listesine eklenir. YAML'da yoksa mevcut kapak zinciri devreye girer.
-5. Demux başarısız olursa (ağ, el sıkışması, ayrıştırma) bugünkü GraphQL listesine dönülür (GUID kimlik, mevcut başlık eşleşmesi). Bu durumda uyarı gösterilmez.
+**Scan (`fetch_owned`):**
+1. Refresh (PC id, same persistent rotation rules).
+2. Demux: owned products, only `owned == true && product_type == 0`.
+3. GraphQL (PC id, best effort): a `spaceId → (name, coverUrl)` map.
+4. Record: `platform_id = product_id`, `launch_uri = install_uri = uplay://launch/<product_id>/0`.
+   - Title: the GraphQL name (by space_id), otherwise the name in the configuration YAML. If the name is a localization key (like `GAMENAME`, `l1`), its equivalent under `localizations: default:` is looked up. If the name cannot be resolved, the record is skipped.
+   - Cover: GraphQL `coverUrl`, otherwise from the YAML `thumb_image` file name `https://ubistatic3-a.akamaihd.net/orbit/uplay_launcher_3_0/assets/<file>`. This host is added to the cover allowlist. If it is not in the YAML, the existing cover chain kicks in.
+5. If demux fails (network, handshake, parsing), it falls back to today's GraphQL list (GUID id, existing title matching). No warning is shown in this case.
 
-**Demux istemcisi:** üretim kodu olur (`cfg(debug_assertions)` kalkar). Yalnızca okuma yapar: clientVersion, authenticate, open `ownership_service`, initialize; ardından kapanır. El sıkışması en fazla 6 kez denenir; tek bir isteğin süresi sınırlı. Bilet asla loglanmaz ya da yazılmaz. Hatalar sunucu verisi içermez.
+**Demux client:** becomes production code (`cfg(debug_assertions)` is removed). It only reads: clientVersion, authenticate, open `ownership_service`, initialize; then it closes. The handshake is tried at most 6 times; the duration of a single request is limited. The ticket is never logged or written. Errors do not contain server data.
 
-**Kurulu kayıtla eşleşme:** kimlikler artık eşleşiyor, bu yüzden `scan_all` kimlikle birleştirir. Yalnızca Ubisoft için olan başlık yedeği zararsız; geri dönüş yolu için kalır.
+**Matching with the installed record:** ids now match, so `scan_all` merges by id. The title fallback, which exists only for Ubisoft, is harmless; it stays for the fallback path.
 
-**Arayüz:** değişiklik yok. Beklenen kartlar:
-- Syndicate ve Origins yeni Ubisoft kartları olur.
-- AC III Remastered, Steam kartına Ubisoft rozetiyle katılır; Watch_Dogs gibi.
-- Diğer kartlar aynı kalır.
+**UI:** no change. Expected cards:
+- Syndicate and Origins become new Ubisoft cards.
+- AC III Remastered joins the Steam card with a Ubisoft badge; like Watch_Dogs.
+- Other cards stay the same.
 
-**Temizlik:** deneme komutları (`debug_ubisoft_demux`'un adım zinciri, `ubi_probe::launcher_session`/`graphql_app`) kaldırılır. Bunun yerine `hangarUbiDemux()` kayıtlı bağlantıyla özet veren ince bir debug komutu olur.
+**Cleanup:** the trial commands (the step chain of `debug_ubisoft_demux`, `ubi_probe::launcher_session`/`graphql_app`) are removed. In their place `hangarUbiDemux()` becomes a thin debug command that gives a summary with the saved connection.
 
-**README:** Ubisoft bölümüne şunlar eklenir:
-- Ubisoft Connect'in iç protokolü (demux) kullanılıyor.
-- Belge Ubisoft Connect PC uygulamasının kimliğiyle saklanıyor; Ubisoft hesap sayfasında öyle görünebilir.
-- Bu yol resmi değil, değişebilir.
+**README:** the following is added to the Ubisoft section:
+- Ubisoft Connect's internal protocol (demux) is used.
+- The token is stored with the ID of the Ubisoft Connect PC application; it may appear that way on the Ubisoft account page.
+- This path is unofficial and may change.
 
-## Hedef dışı
-- DLC/eklenti kartları.
-- Ubisoft+ aboneliği.
-- `claimed_games` (bu hesapta boş).
-- Eski şifresiz önbellek.
+## Non-goals
+- DLC/add-on cards.
+- The Ubisoft+ subscription.
+- `claimed_games` (empty on this account).
+- The old unencrypted cache.
 
-## Test
-**Çekirdek** (sahte API):
-- connect PC belgesini saklar (v2), v1 okunmaz
-- demux listesi + GraphQL haritası → başlık/kapak/kimlik
-- yerelleştirme anahtarı çözümü
-- tür/sahiplik filtresi
-- demux hatasında GraphQL'e dönüş
-- rotasyon ve sızıntı testleri aynen
+## Tests
+**Core** (fake API):
+- connect stores the PC token (v2), v1 is not read
+- demux list + GraphQL map → title/cover/id
+- localization key resolution
+- type/ownership filter
+- fallback to GraphQL on demux failure
+- rotation and leak tests as is
 
-**Canlı:**
-1. Yeniden bağlan.
-2. Kuru çalıştırmada 7 Ubisoft kaydı; Syndicate ve Origins kart, AC III Remastered Steam kartında.
-3. Origins "Kur" Ubisoft Connect'i açar.
+**Live:**
+1. Reconnect.
+2. In the dry run 7 Ubisoft records; Syndicate and Origins are cards, AC III Remastered is on the Steam card.
+3. Origins "Kur" opens Ubisoft Connect.

@@ -1,84 +1,84 @@
-# Hangar Step 1 — tüm oyunlar tek yerde (tasarım)
+# Hangar Step 1 — all games in one place (design)
 
-Tarih: 2026-11-11 · Durum: onay bekliyor · Önceki: `2026-11-09-hangar-design.md` (v1)
-Karar süreci: kullanıcının listesi + LLM Council (5 danışman, 3 isimsiz inceleme) + başkan sentezi.
+Date: 2026-11-11 · Status: awaiting approval · Previous: `2026-11-09-hangar-design.md` (v1)
+Decision process: the user's list + LLM Council (5 advisors, 3 anonymous reviews) + chair synthesis.
 
-## Amaç ve neden
-kullanıcı, bilgisayarındaki her oyunu Hangar'da görüp "Oyna"ya basarak başka bir şey açmadan oynayabilmek istiyor. v1 Steam, Epic ve Ubisoft'u kapsıyor ve Windows'ta doğrulandı. Step 1'in gerçek işi kalan dört kaynak: **GOG**, **kendi istemcisi olan oyunlar (Riot)**, **launcher'a bağlı olmayan yerel oyunlar**, **elle ekleme**.
+## Purpose and rationale
+The user wants to see every game on their computer in Hangar and play it by pressing "Oyna" (Play), without opening anything else. v1 covers Steam, Epic and Ubisoft and has been verified on Windows. The real work of Step 1 is the remaining four sources: **GOG**, **games with their own client (Riot)**, **local games not tied to a launcher**, **manual add**.
 
-Başarı: her kaynaktan en az bir oyun kütüphanede tek kart olarak görünür ve "Oyna" onu başlatır (GOG hariç: aşağıdaki doğrulama notu).
+Success: at least one game from each source appears in the library as a single card and "Oyna" launches it (except GOG: see the verification note below).
 
-## Hedefler
-1. **Oyun ekle (elle):** exe seç + ad yaz → kütüphaneye eklenir. Düzenlenebilir (ad, exe) ve silinebilir. Yeniden tarama bunlara dokunmaz.
-2. **Riot:** `C:\ProgramData\Riot Games\` meta dosyalarından kurulu Riot ürünleri (şu an LoL, TFT) görünür, Riot Client üzerinden başlar.
-3. **Yerel tarama:** kullanıcının seçtiği klasörler (ör. `D:\Games`) taranır; bulunanlar **öneri listesi** olarak gösterilir, kullanıcı işaretlediklerini ekler. Otomatik ekleme yok. Bulunamayan oyun için "Oyun ekle"ye yönlendirir.
-4. **GOG:** GOG Galaxy ile kurulu oyunlar görünür ve Galaxy üzerinden başlar.
-5. Aynı oyun birden fazla kaynaktaysa **tek kart**; birleşik kartta varsayılan her zaman **Steam** (sonra Epic, Ubisoft, GOG, Riot, Yerel).
+## Goals
+1. **Add game (manual):** pick an exe + type a name → added to the library. Editable (name, exe) and deletable. Rescanning does not touch these.
+2. **Riot:** installed Riot products (currently LoL, TFT) appear from the metadata files in `C:\ProgramData\Riot Games\` and launch via the Riot Client.
+3. **Local scan:** folders chosen by the user (e.g. `D:\Games`) are scanned; findings are shown as a **suggestion list**, and the user adds the ones they tick. No automatic adding. For a game that is not found, it points to "Oyun ekle" (Add game).
+4. **GOG:** games installed with GOG Galaxy appear and launch through Galaxy.
+5. If the same game is in multiple sources, it is a **single card**; in a merged card the default is always **Steam** (then Epic, Ubisoft, GOG, Riot, Local).
 
-## Hedef dışı
-- Astryx / React 19 geçişi / arayüzün yeniden yazılması (council: beta, getirisi yok; Step 1 sonrası mevcut CSS ile görsel iyileştirme yapılabilir).
-- Tüm diski ya da Uninstall kayıtlarını arka planda tarama.
-- Battle.net, EA, Xbox vb. başka launcher'lar.
-- Oyun süresi takibi, exe'den ikon çıkarma, indirme/güncelleme (Step 2), mağaza (Step 3).
+## Non-goals
+- Astryx / React 19 migration / rewriting the UI (council: beta, no payoff; after Step 1 visual improvement can be done with the existing CSS).
+- Scanning the whole disk or Uninstall records in the background.
+- Other launchers such as Battle.net, EA, Xbox.
+- Playtime tracking, icon extraction from exe, download/update (Step 2), store (Step 3).
 
-## Anti-hedefler (çalışsa bile başarısızlık sayılır)
-- Kütüphanenin oyun olmayan programlarla (Discord, 7-Zip, sürücüler) dolması.
-- Elle eklenen bir oyunun yeniden taramada kaybolması veya çoğalması.
-- Birleşik kartta Steam yerine başka bir platformun varsayılan olması.
-- GOG'un gerçek oyunla denenmeden "bitti" denmesi.
+## Anti-goals (count as failure even if it works)
+- The library filling up with non-game programs (Discord, 7-Zip, drivers).
+- A manually added game disappearing or duplicating on rescan.
+- Another platform than Steam being the default in a merged card.
+- Declaring GOG "done" without trying it with a real game.
 
-## Kısıtlar
-- Mimari değişmez: `crates/hangar-core` (saf Rust, testli) + ince `src-tauri` + React 18 arayüz.
-- Cerrahi değişiklik, istenmeyen özellik yok; her madde ayrı dal/PR (squash), her biri kendi doğrulamasıyla.
-- Kullanıcı usage limitine yakın: küçük adımlar, en fazla 2-3 Sonnet alt ajan.
-- Yeni tablo eklenmeden önce `%APPDATA%\com.hangar.app\hangar.db` elle yedeklenir (`hangar.db.bak-v1`).
+## Constraints
+- The architecture does not change: `crates/hangar-core` (pure Rust, tested) + thin `src-tauri` + React 18 UI.
+- Surgical changes, no unrequested features; each item gets its own branch/PR (squash), each with its own verification.
+- The user is close to the usage limit: small steps, at most 2-3 Sonnet subagents.
+- Before adding a new table, `%APPDATA%\com.hangar.app\hangar.db` is backed up by hand (`hangar.db.bak-v1`).
 
-## Yaklaşımlar (değerlendirilen)
-| Yaklaşım | Artı | Eksi | Karar |
+## Approaches (evaluated)
+| Approach | Pro | Con | Decision |
 |---|---|---|---|
-| A. Her kaynak kendi `LibraryProvider`'ı; Riot/GOG/elle için ortak "exe + argüman" başlatma | Mevcut yapıya oturur, her biri ayrı test edilir | 3 yeni platform değeri (Rust+TS+DB) | **Seçildi** |
-| B. Riot/GOG yerine tek "özel launcher" girdisi (exe+arg elle) | En az kod | Kullanıcı LoL'u elle girmek zorunda; istenen "otomatik görme" yok | Reddedildi |
-| C. Genel tarama: Uninstall kayıtları + Başlat menüsü + filtreler | En otomatik | Doğruluk ölçütü yok, sürekli yanlış pozitif ayarı | Reddedildi; yerine seçili klasör + öneri listesi |
+| A. Each source has its own `LibraryProvider`; shared "exe + arguments" launching for Riot/GOG/manual | Fits the existing structure, each is tested separately | 3 new platform values (Rust+TS+DB) | **Chosen** |
+| B. A single "custom launcher" entry (exe+arg by hand) instead of Riot/GOG | Least code | The user has to enter LoL by hand; the requested "automatic detection" is missing | Rejected |
+| C. General scan: Uninstall records + Start menu + filters | Most automatic | No accuracy criterion, constant false-positive tuning | Rejected; replaced by selected folders + suggestion list |
 
-## Kararlaştırılan tasarım
+## Decided design
 
 ### Model
-- `Platform` enum'una `Gog`, `Riot`, `Local` eklenir (serde: `gog`, `riot`, `local`). `Platform::ALL` öncelik sırası: Steam, Epic, Ubisoft, Gog, Riot, Local. TS `Platform` tipi ve rozetler (`GOG`, `RIO`, `LOC` kısaltmaları mevcut 3 harf düzenine uyar) aynı sırayla güncellenir.
-- **Başlatma iki türlü olur:** mevcut URI (`steam://` vb., opener ile açılır) veya **exe + argümanlar** (Rust `std::process::Command`, çalışma dizini = exe'nin klasörü, Hangar beklemeden ayrılır). `PlatformEntry`'ye argüman listesi eklenir; `launch_uri` bir URI değil de exe yolu ise exe yolu olarak başlatılır. Kesin alan adı/şekli inşacının kararı; kural: URI ise opener, değilse exe. Yönetici izni isteyen bir exe (Windows hata 740) için başlatma Windows kabuğu üzerinden (UAC penceresi çıkacak şekilde) yapılır; hata olursa Türkçe tek satır mesaj.
+- `Gog`, `Riot`, `Local` are added to the `Platform` enum (serde: `gog`, `riot`, `local`). `Platform::ALL` priority order: Steam, Epic, Ubisoft, Gog, Riot, Local. The TS `Platform` type and the badges (`GOG`, `RIO`, `LOC` abbreviations fit the existing 3-letter layout) are updated in the same order.
+- **Launching is of two kinds:** the existing URI (`steam://` etc., opened via the opener) or **exe + arguments** (Rust `std::process::Command`, working directory = the exe's folder, Hangar detaches without waiting). An argument list is added to `PlatformEntry`; if `launch_uri` is an exe path rather than a URI, it is launched as an exe path. The exact field name/shape is the builder's decision; the rule: opener if it is a URI, exe otherwise. For an exe that requires admin rights (Windows error 740), launching goes through the Windows shell (so the UAC prompt appears); on error, a single-line message in Turkish.
 
-### 1) Oyun ekle (Local, elle)
-- Yeni tablo `local_games(id INTEGER PK, title TEXT, exe_path TEXT, args TEXT NULL, source TEXT 'manual'|'scan', added_at INTEGER)`. Tarama bu tabloyu silmez; `LocalProvider` bu tablodan `PlatformEntry` üretir (`platform_id` = tablo id'si).
-- Exe diskte yoksa giriş "kurulu değil" sayılır ve Oyna hata mesajı verir (kart kaybolmaz).
-- Komutlar: `add_local_game(title, exe_path)`, `update_local_game(id, title, exe_path)`, `remove_local_game(id)`. Exe seçimi için Tauri dialog eklentisi (`tauri-plugin-dialog`, yalnızca dosya açma izni, filtre `.exe`).
-- Arayüz: kenar çubuğunda "Oyun ekle" düğmesi → küçük diyalog (exe seç, ad otomatik exe/klasör adından önerilir, değiştirilebilir). Local kartın "…" menüsünde "Düzenle" ve "Kaldır".
-- **Birleştirme:** Local girişler başka platformlarla **otomatik birleşmez** (kullanıcı aynı oyunu bilerek eklediyse mevcut "birleştir" eylemiyle elle birleştirir). Steam varsayılan kuralı birleşik kartta da geçerli.
+### 1) Add game (Local, manual)
+- New table `local_games(id INTEGER PK, title TEXT, exe_path TEXT, args TEXT NULL, source TEXT 'manual'|'scan', added_at INTEGER)`. Scanning does not delete this table; `LocalProvider` produces `PlatformEntry` from this table (`platform_id` = the table id).
+- If the exe is not on disk, the entry counts as "not installed" and Oyna gives an error message (the card does not disappear).
+- Commands: `add_local_game(title, exe_path)`, `update_local_game(id, title, exe_path)`, `remove_local_game(id)`. For exe selection, the Tauri dialog plugin (`tauri-plugin-dialog`, file-open permission only, `.exe` filter).
+- UI: "Oyun ekle" button in the sidebar → small dialog (pick exe, the name is suggested automatically from the exe/folder name, can be changed). "Düzenle" (Edit) and "Kaldır" (Remove) in the Local card's "…" menu.
+- **Merging:** Local entries do **not merge automatically** with other platforms (if the user added the same game on purpose, they merge manually with the existing "merge" action). The Steam default rule also applies in the merged card.
 
 ### 2) Riot
-- `RiotProvider`: `C:\ProgramData\Riot Games\RiotClientInstalls.json` → `rc_default` (RiotClientServices.exe). `Metadata\<ürün>.<patchline>\<ürün>.<patchline>.product_settings.yaml` içinden `product_install_full_path`; **bu klasör diskte varsa kurulu**. Ad: bilinen ürünler için sabit tablo (`league_of_legends` → "League of Legends", `teamfighttactics` → "Teamfight Tactics", `valorant` → "VALORANT"), bilinmeyen ürün atlanır. PBE patchline'ları adın sonuna " (PBE)" eklenerek ayrı giriş olur.
-- Başlatma: exe = `rc_default`, argümanlar `--launch-product=<ürün> --launch-patchline=<patchline>`.
-- YAML için tam bir ayrıştırıcı yerine yalnızca gereken üst düzey anahtarı okuyan küçük bir okuyucu yeterli (inşacının kararı). Fixture testleri: gerçek dosyalardan kısaltılmış örnekler.
-- Bu makinede beklenen: League of Legends ve Teamfight Tactics görünür, PBE görünmez.
+- `RiotProvider`: `C:\ProgramData\Riot Games\RiotClientInstalls.json` → `rc_default` (RiotClientServices.exe). `product_install_full_path` from `Metadata\<product>.<patchline>\<product>.<patchline>.product_settings.yaml`; **if this folder exists on disk, it is installed**. Name: a fixed table for known products (`league_of_legends` → "League of Legends", `teamfighttactics` → "Teamfight Tactics", `valorant` → "VALORANT"), unknown products are skipped. PBE patchlines become separate entries by appending " (PBE)" to the name.
+- Launch: exe = `rc_default`, arguments `--launch-product=<product> --launch-patchline=<patchline>`.
+- Instead of a full YAML parser, a small reader that reads only the needed top-level key is enough (builder's decision). Fixture tests: shortened samples from real files.
+- Expected on this machine: League of Legends and Teamfight Tactics appear, PBE does not.
 
-### 3) Yerel tarama (öneri listesi)
-- Ayarlar'a "Oyun klasörleri" listesi (ekle/kaldır, klasör seçici) — ayar anahtarı `scan_folders` (JSON dizi).
-- "Klasörleri tara" → her seçili klasörün **birinci seviye alt klasörü** bir aday; adayın içinde (en fazla 2 seviye derinlikte) uygun exe'lerin **en büyüğü** önerilen exe. Hariç tutulan exe adları: `unins*`, `*setup*`, `*install*`, `*redist*`, `vc_redist*`, `dxsetup*`, `*crash*`, `UnityCrashHandler*`, `*updater*`. `*launcher*` hariç tutulmaz (bazı oyunların asıl exe'si böyle adlanır). Kesin liste inşacının kararı, testle sabitlenir.
-- Zaten bilinen girişlerin `install_path`'i altındaki ya da `local_games`'te olan exe'ler aday olmaz.
-- Sonuç bir diyalogda işaretlenebilir liste (ad düzenlenebilir); "Ekle" seçilenleri `local_games`'e `source='scan'` ile yazar. Hiç aday yoksa: "Bulunamadı — Oyun ekle ile elle ekleyebilirsin."
+### 3) Local scan (suggestion list)
+- A "Oyun klasörleri" (Game folders) list in Settings (add/remove, folder picker) — setting key `scan_folders` (JSON array).
+- "Klasörleri tara" (Scan folders) → each **first-level subfolder** of every selected folder is a candidate; within the candidate (at most 2 levels deep) the **largest** suitable exe is the suggested exe. Excluded exe names: `unins*`, `*setup*`, `*install*`, `*redist*`, `vc_redist*`, `dxsetup*`, `*crash*`, `UnityCrashHandler*`, `*updater*`. `*launcher*` is not excluded (some games' main exe is named like that). The exact list is the builder's decision, pinned by tests.
+- Exes under the `install_path` of already known entries, or already in `local_games`, are not candidates.
+- The result is a tickable list in a dialog (names editable); "Ekle" (Add) writes the selected ones to `local_games` with `source='scan'`. If there are no candidates: "Bulunamadı — Oyun ekle ile elle ekleyebilirsin." (Not found — you can add manually with Add game.)
 
 ### 4) GOG
-- `GogProvider`: `HKLM\SOFTWARE\WOW6432Node\GOG.com\Games\<gameId>` anahtarları (`gameName`, `path`, `exe`); Galaxy yolu `HKLM\SOFTWARE\WOW6432Node\GOG.com\GalaxyClient\paths\client`. Başlatma: `GalaxyClient.exe /command=runGame /gameId=<id> /path="<path>"`; Galaxy yoksa oyunun `exe`'si doğrudan.
-- Bu makinede Galaxy kurulu ama GOG oyunu yok → test yalnızca ayrıştırma mantığını kapsar. **Doğrulama:** kullanıcı GOG'dan ücretsiz bir oyun kurar ve Oyna denenir; o zamana kadar CLAUDE.md'de "doğrulanmadı" olarak kalır.
+- `GogProvider`: `HKLM\SOFTWARE\WOW6432Node\GOG.com\Games\<gameId>` keys (`gameName`, `path`, `exe`); Galaxy path `HKLM\SOFTWARE\WOW6432Node\GOG.com\GalaxyClient\paths\client`. Launch: `GalaxyClient.exe /command=runGame /gameId=<id> /path="<path>"`; if there is no Galaxy, the game's `exe` directly.
+- On this machine Galaxy is installed but there is no GOG game → the test covers only the parsing logic. **Verification:** the user installs a free game from GOG and Oyna is tried; until then it stays "not verified" in CLAUDE.md.
 
-## Sıra ve her maddenin "bitti" kontrolü
-| # | Madde | Bitti sayılır |
+## Order and the "done" check of each item
+| # | Item | Counts as done when |
 |---|---|---|
-| 0 | Ortak temel: yeni platformlar + exe başlatma | core testleri (Steam varsayılan, exe/URI ayrımı) geçer |
-| 1 | Oyun ekle | Herhangi bir exe eklenir, Oyna açar, düzenle/kaldır çalışır, Yenile sonrası kaybolmaz |
-| 2 | Riot | LoL kartı görünür, Oyna Riot Client'ı açıp LoL'u başlatır |
-| 3 | Yerel tarama | Seçili klasörde aday listesi gelir, oyun olmayan araçlar listede değil, eklenen oyun başlar |
-| 4 | GOG | Fixture testleri geçer; gerçek bir GOG oyunuyla Oyna denenince "doğrulandı" |
+| 0 | Shared foundation: new platforms + exe launching | core tests (Steam default, exe/URI distinction) pass |
+| 1 | Add game | Any exe is added, Oyna opens it, edit/remove works, it does not disappear after Refresh |
+| 2 | Riot | LoL card appears, Oyna opens the Riot Client and starts LoL |
+| 3 | Local scan | A candidate list comes from the selected folder, non-game tools are not in the list, the added game starts |
+| 4 | GOG | Fixture tests pass; "verified" once Oyna is tried with a real GOG game |
 
-Her madde: `cargo test -p hangar-core`, `npx tsc --noEmit`, vitest, `npm run tauri dev` ile kullanıcıyla deneme → ayrı PR, squash.
+Each item: `cargo test -p hangar-core`, `npx tsc --noEmit`, vitest, trying with the user via `npm run tauri dev` → separate PR, squash.
 
-## İnşacıya bırakılanlar
-Alan adları ve tam veri şekli, YAML okuyucu yöntemi, exe hariç tutma listesinin son hali, diyalogların görsel ayrıntısı (mevcut "Kokpit + Vitrin" stiline uyarak), Riot/GOG/Local kartları için kapak bulma (mevcut başlık ile kapak arama akışı kullanılır, bulunamazsa mevcut yer tutucu).
+## Left to the builder
+Field names and the exact data shape, the YAML reader method, the final form of the exe exclusion list, the visual detail of the dialogs (matching the existing "Kokpit + Vitrin" style), cover lookup for Riot/GOG/Local cards (the existing title-based cover search flow is used; the existing placeholder if not found).

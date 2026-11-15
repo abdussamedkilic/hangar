@@ -1,73 +1,73 @@
-# Hangar — Ubisoft Connect hesap bağlantısı · Kısa tasarım
+# Hangar — Ubisoft Connect account connection · Short design
 
-Tarih: 2026-11-14 · Durum: onay bekliyor
-Dayanaklar:
-- Epic tasarımı (`2026-11-12-hangar-accounts-design.md`) — aynı kalıp, aynı güvenlik kuralları.
-- U0 keşfi (2026-11-14, kullanıcının gerçek hesabıyla).
+Date: 2026-11-14 · Status: awaiting approval
+Basis:
+- Epic design (`2026-11-12-hangar-accounts-design.md`) — same pattern, same security rules.
+- U0 discovery (2026-11-14, with the user's real account).
 
-## Niyet
-Ubisoft hesabındaki tüm PC oyunları (kurulu olmayanlar dahil) Hangar'a gelsin. Bağlantı Epic'teki gibi kurulur:
-- Ayarlar › Hesaplar'dan, Ubisoft'un kendi giriş sayfasıyla.
-- Şifre Hangar'a gelmez.
-- Belge yalnızca bu PC'de, DPAPI ile şifreli durur.
+## Intent
+All PC games on the Ubisoft account (including uninstalled ones) should come into Hangar. The connection is set up like Epic's:
+- From Settings › Hesaplar, with Ubisoft's own sign-in page.
+- The password never reaches Hangar.
+- The token stays only on this PC, encrypted with DPAPI.
 
-## U0'da doğrulananlar
-- **Giriş:** `connect.ubisoft.com/login?appId=82b650c0-…&genomeId=42d07c95-…` gömülü pencerede çalışıyor. Yalnızca connect.ubisoft.com ziyaret edildi.
-- **Oturum değerleri:** girişten sonra `localStorage`'da `PRODloginData` (ticket, sessionId, userId) ve `PRODrememberMe` (rememberMeTicket) bulunuyor. Başlatma betiği bunları nonce'lu geri dönüşle alıyor.
-- **Yenileme:** `POST https://public-ubiservices.ubi.com/v3/profiles/sessions` çağrısı `Authorization: rm_v1 t=<rememberMeTicket>` ve gövde `{"rememberMe":true}` ile HTTP 200 dönüyor.
-- **Sahip olunan oyunlar:** `POST …/v1/profiles/me/uplay/graphql` (AllGames sorgusu) 4 PC oyunu döndü.
-  - Her oyunda `id` ve `spaceId` (GUID), `name` ve `coverUrl` alanları var.
-  - Launcher'ın sayısal kimliği gelmiyor. Yerel önbellek (`configurations.vdat`) şifreli. Yapı sorgusu (introspection) kapalı.
-- **Kur bağlantısı:** `uplay://launch/<spaceId>/0` Ubisoft Connect'i açıyor. Launcher "Initializing" ekranında kaldığı için oyunun sayfasına gidip gitmediği doğrulanamadı.
+## Verified in U0
+- **Sign-in:** `connect.ubisoft.com/login?appId=82b650c0-…&genomeId=42d07c95-…` works in the embedded window. Only connect.ubisoft.com was visited.
+- **Session values:** after sign-in, `PRODloginData` (ticket, sessionId, userId) and `PRODrememberMe` (rememberMeTicket) are found in `localStorage`. The initialization script takes them with a return carrying a nonce.
+- **Refresh:** the call `POST https://public-ubiservices.ubi.com/v3/profiles/sessions` with `Authorization: rm_v1 t=<rememberMeTicket>` and body `{"rememberMe":true}` returns HTTP 200.
+- **Owned games:** `POST …/v1/profiles/me/uplay/graphql` (AllGames query) returned 4 PC games.
+  - Each game has `id` and `spaceId` (GUID), `name` and `coverUrl` fields.
+  - The launcher's numeric id does not come. The local cache (`configurations.vdat`) is encrypted. Schema introspection is closed.
+- **Install link:** `uplay://launch/<spaceId>/0` opens Ubisoft Connect. Since the launcher stayed on the "Initializing" screen, it could not be verified whether it went to the game's page.
 
-## Tasarım (Epic'le aynı yapı)
-**Belge**
-- `SecretStore` içinde `Platform::Ubisoft` dosyası: `accounts\ubisoft.dat`.
-- İçerik `{v, remember_me_ticket, user_id, display_name}`.
-- Kısa ömürlü ticket ve sessionId yalnızca bellekte tutulur.
-- Dönen belge kullanılmadan önce kaydedilir; kaydedilemezse bellekte tutulur. Epic'teki `pending` kuralının aynısı.
+## Design (same structure as Epic)
+**Token**
+- A `Platform::Ubisoft` file in `SecretStore`: `accounts\ubisoft.dat`.
+- Content `{v, remember_me_ticket, user_id, display_name}`.
+- The short-lived ticket and sessionId are kept only in memory.
+- The rotated token is saved before use; if it cannot be saved, it is kept in memory. Same as Epic's `pending` rule.
 
-**Tarama**
-- Her taramada rm_v1 yenilemesi yapılır, ardından GraphQL AllGames çağrılır.
-- Yalnızca PC sahipliği olan oyunlar alınır.
-- Her oyundan bir kayıt üretilir:
+**Scan**
+- On every scan an rm_v1 refresh is done, then the GraphQL AllGames is called.
+- Only games with PC ownership are taken.
+- One record is produced from each game:
   - `platform: Ubisoft`, `platform_id: spaceId`, `title: name`, `installed: false`
   - `launch_uri = install_uri = uplay://launch/<spaceId>/0`
-  - `cover_url = coverUrl`; kapak izin listesine `ubiservices.cdn.ubi.com` eklenir.
-- Önbellek ve "süresi doldu" davranışı Epic'le aynıdır.
+  - `cover_url = coverUrl`; `ubiservices.cdn.ubi.com` is added to the cover allowlist.
+- Cache and "expired" behavior is the same as Epic's.
 
-**Kurulu kayıtla eşleşme**
-- Kayıt defteri sayısal kimlik veriyor, GraphQL GUID; bu yüzden kimlikler eşleşmez.
-- Kural: aynı platformda, kimlik eşleşmiyor ama `normalize(başlık)` kurulu bir kayıtla aynıysa, sahip olunan kayıt kurulu kayda katılır. Kurulu kayıt kazanır; sahip olunanın kapağı alınır.
-- Böylece aynı oyun "Ubisoft · 2. kopya" olarak görünmez.
+**Matching with the installed record**
+- The registry gives a numeric id, GraphQL a GUID; so the ids do not match.
+- Rule: on the same platform, if the id does not match but `normalize(title)` is the same as an installed record, the owned record joins the installed record. The installed record wins; the owned one's cover is taken.
+- This way the same game does not appear as "Ubisoft · 2. kopya" (2nd copy).
 
-**Giriş penceresi**
-- U0'daki `UBI_NAV_RULES` ve `ubi_init_script` aynen kullanılır.
-- Uygulama kimliği tek bir sabitte durur (Ubisoft bu kimliği değiştirebiliyor).
+**Sign-in window**
+- `UBI_NAV_RULES` and `ubi_init_script` from U0 are used as is.
+- The application id lives in a single constant (Ubisoft can change this id).
 
-**Arayüz**
-- Ayarlar › Hesaplar'a "Ubisoft Connect" satırı eklenir: Bağlan / Bağlantıyı kes / Yeniden bağlan.
-- Metinler Epic satırıyla aynı kalıpta.
+**UI**
+- A "Ubisoft Connect" row is added to Settings › Hesaplar: Bağlan / Bağlantıyı kes / Yeniden bağlan (Connect / Disconnect / Reconnect).
+- Texts follow the same pattern as the Epic row.
 
-**Bağlantıyı kes**
-- Önce sunucuda oturum kapatma denenir: `DELETE https://public-ubiservices.ubi.com/v3/profiles/sessions`. Başarısız olursa yok sayılır.
-- Ardından belge ve önbellek silinir.
+**Disconnect**
+- First ending the session on the server is tried: `DELETE https://public-ubiservices.ubi.com/v3/profiles/sessions`. If it fails it is ignored.
+- Then the token and cache are deleted.
 
-**README:** "Hesap bağlantıları"na Ubisoft eklenir. Notlar: resmi olmayan uçlar, uygulama kimliği değişebilir, belge hesabın tamamına erişir.
+**README:** Ubisoft is added to "Account connections". Notes: unofficial endpoints, the application id may change, the token can access the whole account.
 
-## Hedef dışı
-- Ubisoft+ abonelik kütüphanesi.
-- LUNA (bulut) sahiplikleri.
-- Launcher'ın sayısal kimliğini bulmak (önbellek şifreli).
+## Non-goals
+- The Ubisoft+ subscription library.
+- LUNA (cloud) ownerships.
+- Finding the launcher's numeric id (the cache is encrypted).
 
-## Test ve doğrulama
-**Çekirdek** (sahte API ile):
-- bağlanma, belge dönüşü, kaydedilemeyen belgenin bellekte tutulması
-- çevrimdışıyken önbellek
-- `invalid_grant` → süresi doldu
-- kesme sırasında süren taramanın geri yazamaması
-- PC filtresi
-- başlıkla kurulu kayıtla eşleşme
-- sızıntı testi
+## Tests and verification
+**Core** (with a fake API):
+- connecting, token rotation, keeping an unsaveable token in memory
+- cache when offline
+- `invalid_grant` → expired
+- a scan in progress during disconnect cannot write back
+- PC filter
+- matching with the installed record by title
+- leak test
 
-**Canlı:** bağlan → 4 oyun → Watch_Dogs tek kart (Steam + Ubisoft) → Far Cry 4 "Kur" Ubisoft Connect'i açar → kes.
+**Live:** connect → 4 games → Watch_Dogs is a single card (Steam + Ubisoft) → Far Cry 4 "Kur" opens Ubisoft Connect → disconnect.

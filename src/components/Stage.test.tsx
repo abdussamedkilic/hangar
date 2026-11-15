@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { vi } from "vitest";
 import Stage from "./Stage";
 import type { Game } from "../lib/api";
@@ -13,7 +13,7 @@ const local: Game = {
 
 function remove(answer: boolean) {
   const onRemove = vi.fn();
-  const confirm = vi.spyOn(window, "confirm").mockReturnValue(answer);
+  const confirm = vi.spyOn(window, "confirm").mockResolvedValue(answer as never);
   render(<Stage game={local} onLaunch={vi.fn()} onChoose={vi.fn()} onEdit={vi.fn()} onRemove={onRemove} />);
   fireEvent.click(screen.getByRole("button", { name: "Diğer işlemler" }));
   fireEvent.click(screen.getByRole("menuitem", { name: "Kaldır" }));
@@ -22,13 +22,16 @@ function remove(answer: boolean) {
 
 afterEach(() => vi.restoreAllMocks());
 
-test("Kaldır asks first and removes on confirm", () => {
+test("Kaldır asks first and removes on confirm", async () => {
   const { onRemove, confirm } = remove(true);
+  await waitFor(() => expect(onRemove).toHaveBeenCalledWith(local));
   expect(confirm).toHaveBeenCalledWith("“Benim Oyunum” Hangar'dan kaldırılsın mı? Oyun dosyaları silinmez.");
   expect(onRemove).toHaveBeenCalledWith(local);
 });
 
-test("Kaldır does nothing when the confirm is cancelled", () => {
-  const { onRemove } = remove(false);
+test("Kaldır does nothing when the confirm is cancelled", async () => {
+  const { onRemove, confirm } = remove(false);
+  await waitFor(() => expect(confirm).toHaveBeenCalled());
+  await new Promise((r) => setTimeout(r, 20));
   expect(onRemove).not.toHaveBeenCalled();
 });

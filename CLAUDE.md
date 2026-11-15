@@ -1,90 +1,98 @@
-# Hangar — proje hafızası
+# Hangar — project memory
 
-Steam, Epic ve Ubisoft oyunlarını tek kütüphanede birleştiren Windows masaüstü uygulaması. Kullanıcı: kullanıcı (Türkçe konuşur, Windows 11 Türkçe sistem, kullanıcı klasörü `C:\Users\user`, repo `C:\Users\user\workdir\hangar`).
+Windows desktop app that merges Steam, Epic and Ubisoft games into a single library. User (speaks Turkish, Windows 11 with Turkish locale, user folder `C:\Users\user`, repo `C:\Users\user\workdir\hangar`).
 
-## Durum (2026-11-11)
-- v1 `main`'de (PR #1 squash ile merge edildi, 2026-11-11; GitHub: <owner>/hangar). Yeni işler `main`'den yeni dalda.
-- `npm run tauri dev` Windows'ta açıldı: Steam (DAVE THE DIVER, Watch_Dogs), Epic (Death's Door), Ubisoft (Watch_Dogs → Steam ile birleşti) doğru geldi, kapaklar indi.
-- Düzeltildi: Ayarlar'a SteamID yerine kullanıcı adı (`player`) girilince GetOwnedGames sessizce başarısızdı → `steam::is_steamid64`; 17 haneli değilse `loginusers.vdf`'ten alınır.
-- 2026-11-11: `feat/step1` dalında Riot/klasör taraması/elle ekleme/GOG eklendi (GOG doğrulanmadı); PR kullanıcı kontrolünden sonra.
-- Not: `localhost:1420` tarayıcıda çalışmaz (Tauri `invoke` yok) — yalnızca Tauri penceresinde test edilir.
+## Status (2026-11-11)
+- v1 is on `main` (PR #1 squash-merged, 2026-11-11; GitHub: <owner>/hangar). New work goes on a new branch from `main`.
+- `npm run tauri dev` ran on Windows: Steam (DAVE THE DIVER, Watch_Dogs), Epic (Death's Door), Ubisoft (Watch_Dogs → merged with Steam) came through correctly, covers downloaded.
+- Fixed: entering a username (`player`) instead of a SteamID in Settings made GetOwnedGames fail silently → `steam::is_steamid64`; if it is not 17 digits, it is taken from `loginusers.vdf`.
+- 2026-11-11: Riot/folder scan/manual add/GOG added on the `feat/step1` branch (GOG not verified); PR after the user's check.
+- Note: `localhost:1420` does not work in a browser (no Tauri `invoke`) — test only in the Tauri window.
 
-## Sıradaki görevler (sırayla, adım adım)
-1. ✅ (2026-11-11) Kurulu olmayan Steam oyunları API ile geliyor.
-2. ✅ (2026-11-11) Oyna: Steam, Epic, Ubisoft hepsi açıldı. (Ubisoft Connect bir kez "initializing"de takıldı — Connect kaynaklı; Hangar her tıkta `uplay://` açar, kilit yok ama geri bildirim de yok.)
-3. ✅ (2026-11-11) Uyarılar üstteki `notice` satırında görünüyor; Ayarlar'dan taramanın uyarıları kayboluyordu → diyalog artık App'in `rescan`'ini çağırıyor.
-4. ✅ (2026-11-11) PR #1 squash ile `main`'e alındı.
-5. ✅ (2026-11-11) Adım 1 (`feat/step1`): Oyun ekle (elle ekleme), Riot sağlayıcısı (League of Legends, TFT), seçili klasörlerde oyun önerisi taraması, GOG sağlayıcısı. Kullanıcının elle kontrolü bekliyor; sonra `main`'e PR.
-   - GOG **doğrulanmadı** — gerçek bir GOG oyunuyla denenmedi (bu PC'de Galaxy var, oyun yok; kayıt defteri `GOG.com\Games`).
-   - Kullanıcı denedi (2026-11-11): Riot/LoL açılıyor, TFT bulunuyor, Watch_Dogs (Steam) Ubisoft Connect üzerinden açılıyor (normal).
-   - Ek (aynı dal): GOG Galaxy yerel DB'sinden (`C:\ProgramData\GOG.com\Galaxy\storage\galaxy-2.0.db`, salt okuma) kurulu olmayan GOG oyunları (bu PC'de 161); karttan "Kapak seç…"; oyunlar artık Hangar'ın alt süreci olarak başlamıyor (PowerShell `Start-Process`, değerler env ile) — `tauri dev` yeniden başlatması LoL'u öldürüyordu.
-   - Riot ikonundan kapak kodu var ama bu PC'deki LoL `.ico` PNG çerçevesi içermiyor → kapak "Kapak seç…" ile elle.
-   - Epic'te kurulu olmayan oyunlar yok: güvenilir yerel liste yok, hesap girişi gerekiyor (ayrı tasarım).
-   - ✅ (2026-11-11) PR #2 squash ile `main`'e alındı. Kullanıcı GOG'u denedi: kurulu olmayan oyunda "Kur" Galaxy'de kurulumu açıyor.
-6. **Sıradaki (2026-11-11, kullanıcı istedi):** (a) Epic'te kurulu olmayan oyunlar (yerel güvenilir liste yok; hesap girişi ya da başka kaynak — önce tasarım), (b) Ubisoft Connect'te sahip olunan oyunların tamamı (şu an yalnızca kurulu olanlar, kayıt defterinden). Önce brainstorming + karar, sonra plan.
-   - **Karar (kullanıcı, 2026-11-12): Galaxy YOK. Playnite yolu — uygulama içi bağlantı, veriler yalnızca kullanıcının bilgisayarında kalır.** (Council Galaxy'yi önermişti; kullanıcı reddetti.)
-     - Epic: Hangar ayrı pencerede Epic'in kendi giriş sayfasını açar (Hangar şifreyi görmez), yetki kodu → OAuth (Legendary/Heroic/Playnite akışı, launcher'ın açık client id'si), sahip olunan oyunlar Epic kütüphane + katalog servisinden. Yenileme belgesi yalnızca yerelde, Windows DPAPI ile şifreli; "Bağlantıyı kes" siler; asla loglanmaz; sunucu/telemetri yok.
-     - Ubisoft: önce kısa, zaman sınırlı deneme (şifreli yerel önbellek vs Ubisoft'un kendi giriş sayfası + ticket); çalışan yol bulunamazsa yalnızca kurulu oyunlar kalır.
-     - Ayarlar'da "Hesaplar" bölümü; README'de güvenlik notu (belge nerede, nasıl silinir, resmi olmayan servis riski).
-     - Sıradaki oturum: brainstorming → kısa tasarım belgesi → plan → subagent-driven (Sonnet). Riskler council'dan: Epic client id'yi engelleyebilir, belge hesabın tamamına erişir, aynı kullanıcıdaki zararlı yazılıma karşı DPAPI korumaz.
-   - ✅ (2026-11-13) **Epic yapıldı** — `feat/epic-account` dalı (spec `docs/superpowers/specs/2026-11-12-hangar-accounts-design.md`, plan `docs/superpowers/plans/2026-11-12-hangar-epic-account.md`). Tasarım ve plan konseyden geçti; tüm görevler incelendi; son tüm-dal incelemesi temiz. Kullanıcı denedi, PR #3 squash ile `main`'e alındı (2026-11-13).
-     - E0 (canlı giriş, 2026-11-12): e-posta ile giriş çalışıyor, yalnızca www.epicgames.com ziyaret ediliyor; 240 kayıt (225 oyun, 15 DLC). Gotcha: katalog bulk ucu virgülle birleştirilmiş kimlikte `{}` döner — her kimlik ayrı `id=` parametresi. Yenileme belgesi her kullanımda döner, ~1 yıl geçerli.
-     - Giriş penceresi izin listesi (`accounts/login.rs` NAV_RULES): Epic + captcha + sağlayıcıların yalnızca giriş yolları (host + yol öneki, port yok). Kullanıcı diğer girişleri denedi, çalışıyor.
-   - ✅ **Faz 1 finali** — PR #4 squash ile `main`'e alındı (2026-11-13). Kullanıcı arayüzü çok beğendi.
-     - ✅ Epic diğer giriş sağlayıcıları; ✅ Epic/GOG kapakları (Epic keyImages, Galaxy `originalImages.verticalCover`, yedek `api.gog.com/v2/games/<id>` `_links.boxArtImage`; indirme host izin listesi, yönlendirme yok; WebP; oturumluk başarısızlık önbelleği). İncelendi.
-     - ✅ (2026-11-13) **Sürüm/kopya kartları — Revizyon 2** (spec `docs/superpowers/specs/2026-11-13-hangar-editions-design.md` üstteki REVİZYON 2 bloğu geçerli; konseyden geçti). Kural: **bir kart = bir yapı**. Remastered/Definitive/Enhanced/Complete/GOTY/Gold… ayrı kart (kullanıcı: Infinite ile Infinite Complete ayrı); aynı yapının kopyaları (mağazalar, ™, "- Amazon Prime" → "(Prime)", aynı mağazada aynı adlı iki kayıt → "· 2. kopya") tek kart. Kart anahtarı: Orijinal → `normalize`, diğer → `normalize|Etiket` (orijinal kartların satırı/kapağı korunur). Tercih kayıt bazında (`"platform:id"`, eski platform değeri okunur). Rozetler mağaza başına bir, en fazla 3 + "+N", ipucunda tüm kopyalar. Birleştirme seçicisinde adayların mağaza rozetleri.
-       - Kuru çalıştırma (canlı DB kopyası): `HANGAR_DB=<kopya> HANGAR_DRY_OUT=<çıktı.md> cargo test -p hangar-core dry_run_live_cards -- --ignored` — kart listesi + aynı temel adın birden çok kartı.
-       - Kullanıcı Mafia II DE'yi yanlışlıkla Mafia III DE ile birleştirmişti; override DB'den silindi (yedek scratchpad'de).
-     - Debug'da `await hangarProbe()` (DevTools) temizlenmiş canlı yanıtları `%APPDATA%\com.hangar.app\e0\` altına yazar; depoya girmez. Yerel canlı test: `HANGAR_EPIC_LIVE_DIR="$APPDATA/com.hangar.app/e0" cargo test -p hangar-core live_ -- --ignored`.
-   - ✅ **FAZ 2 bitti — PR #5 squash ile `main`'de (2026-11-14); ✅ FAZ 3 bitti — PR #6 squash ile `main`'de:** koleksiyonlar (kayıt anahtarıyla üyelik), sekme şeridi, liste görünümü, `theme.json`, Steam önceliği (birden çok kurulu kopyada Oyna Steam'i açar), küçük açıklar.
-   - **FAZ 4 — `feat/phase4` (devam ediyor, henüz `main`'e alınmadı; 2026-11-14):**
-     - Steam girişi (API anahtarsız): kalıcı WebView2 profili `app_data_dir/webview-steam`; mağaza sayfasındaki `application_config` `data-loyalty_webapi_token` ile aynı sayfadan `IPlayerService/GetOwnedGames`. Görünmez pencere taramada, 20 sn zaman aşımı, betik giriş-yok sinyali 12 sn; odak taramalarında 10 dk sınır, Yenile atlar; anahtar varsa anahtar yolu.
-     - GOG hesabı: Galaxy'nin açık OAuth client `46899977096215655`; `getFilteredProducts mediaType=1`; kaynak seçimi galaxy/account (bağlı değilse galaxy davranışı).
-     - Kaydedilebilir filtreler (Kurulu sanal yerleşik; `ui.filter`), daraltılabilir kenar çubuğu (`ui.sidebar`, 220/64px), kartı koleksiyon sekmesine sürükle-bırak (`dragDropEnabled:false`), Ayarlar iki sekme: Hesaplar / Özelleştir.
-     - Amazon Games yapılmayacak (kullanıcı kararı). Masaüstü exe (NSIS) en sona kaldı.
-     - Komut/çalışma notları: vitest node ile (bun yanlış hata verir): `PATH="$APPDATA/fnm/node-versions/v26.13.0/installation:$PATH" node node_modules/vitest/vitest.mjs run`. Paralel izler için ayrı git worktree + `node_modules` junction. Kullanıcı ekran kontrolü (computer-use) iznini reddetti → görsel kontroller canlı testte kullanıcıya bırakılır. Kullanıcı "her daim squash ile main'e merge edebilirsin" dedi.
-   - (Eski Faz 2 listesi, tarihçe:)
-     1. ✅ (2026-11-14) **Ubisoft Connect girişi** — kullanıcı bağladı, çalışıyor (spec `docs/superpowers/specs/2026-11-14-hangar-ubisoft-account-design.md`; Opus incelemesi + düzeltmeler yapıldı). `UbiClient` (rm_v1 yenileme, GraphQL `games(filterBy:{isOwned:true})`, DPAPI `accounts\ubisoft.dat`), Hesaplar'da satır, kurulu kayıtla yalnızca Ubisoft için tek adaylı başlık eşleşmesi, `uplay://launch/<spaceId>/0` (Connect'i açar; oyun sayfasına gittiği doğrulanamadı — Connect "Initializing"de takıldı).
-        - ✅ (2026-11-14) **Tam liste demux ile** (spec `docs/superpowers/specs/2026-11-14-hangar-ubisoft-demux-design.md`): kullanıcı 7/7 gördü (Origins, Syndicate dahil). Demux yalnızca PC uygulama kimliği `f68a4bb5-…` ile alınmış bileti kabul eder; giriş sayfası web kimliğiyle kalır, `connect` web rememberMe'yi bir kez PC kimliğiyle yeniler (web belgesi geçersizleşir), belge v2. TLS sunucusu el sıkışmasını sık keser → 6 deneme; yalnızca TLS1.2 + ECDHE-ECDSA-AES256-GCM-SHA384; clientVersion = kurulu upc.exe yapısı (13416). `platform_id` artık sayısal ürün kimliği (kayıt defteriyle aynı). Demux başarısızsa GraphQL listesine dönülür. Debug: `hangarUbiDemux()`, `hangarUbiProbe()`, `hangarUbiQuery(body)`.
-     2. Ufak UI iyileştirmeleri (kullanıcı ayrıntı verecek).
-     3. **Masaüstü exe** (en sona, her şey bitince): `npm run tauri build` → NSIS kurulum + masaüstü kısayolu.
-     4. ✅ **GOG yeni oyun**: Galaxy DB (WAL dahil) değişince pencere odağında otomatik yeniden tarama (10 sn sınır).
-     5. ✅ **"- Amazon Luna" eki**: kopya eki, menüde "(Amazon)" (kullanıcı kararı); Prime "(Prime)" kalıyor.
-     6. ~~Amazon Games sağlayıcısı~~ — kullanıcı istemedi (2026-11-14; uygulamayı kurmak istemiyor).
-     - Çalışma düzeni: konsey → tek soru → spec/plan → paralel Sonnet uygulama → Opus inceleme → kuru çalıştırma/canlı kontrol.
-   - **Ubisoft (Faz 2/1):** U0 keşfi (connect.ubisoft.com ticket, `rm_v1` yenileme, sahip olunanlar + kayıt defteriyle eşleşen ürün kimliği), kullanıcının girişiyle; başarılıysa ortak altyapı (giriş penceresi, `SecretStore`, `OwnedLists`, Hesaplar) üzerine kısa ayrı plan.
-   - Not (2026-11-13): PC 30 günde 14 kez BSOD ile yeniden başladı (çoğu 0x1a MEMORY_MANAGEMENT; olası RAM/platform). Bir çökme git ref'ini ve index'i sıfırla doldurdu — onarıldı. Uzun işlerden önce `git fsck` iyi fikir.
-7. Sonra "Bilinen küçük açıklar" listesi.
+## LATEST STATUS (2026-11-14 evening)
+- Phase 4 is on main via PR #7 squash (Steam/GOG sign-in, filters, collapsible menu, drag-and-drop, Settings tabs). The user tried it live.
+- 3 tasks remain to finish the project (new branch from main):
+  1. Unwanted scroll in the collapsed sidebar (vertical + horizontal ◀▬▶) — overflow in the 64px rail.
+  2. Theme picker in Özelleştir (Customize): active theme in the select box; a new theme is saved locally; switching between themes.
+  3. Desktop exe: `npm run tauri build` → NSIS + desktop shortcut.
 
-## v1.1 fikirleri (kullanıcıdan, 2026-11-11 — henüz tasarlanmadı, önce brainstorming)
-- "Oyna" sonrası geri bildirim/durum (ör. "Ubisoft Connect'e gönderildi", tekrar dene).
-- (Yapıldı: Riot sağlayıcısı, elle ekleme, GOG — yukarıda adım 5.)
-- NVIDIA app'in oyun taramasını örnek almak (rea-skill) — yerel dosyalardan okumak kırılgan; önce kendi sağlayıcılarımız.
+## Upcoming tasks (in order, step by step)
+1. ✅ (2026-11-11) Uninstalled Steam games now come via the API.
+2. ✅ (2026-11-11) Play: Steam, Epic, Ubisoft all launched. (Ubisoft Connect once got stuck on "initializing" — caused by Connect; Hangar opens `uplay://` on every click, there is no lock but also no feedback.)
+3. ✅ (2026-11-11) Warnings show in the top `notice` row; warnings from a scan started in Settings used to disappear → the dialog now calls App's `rescan`.
+4. ✅ (2026-11-11) PR #1 squash-merged into `main`.
+5. ✅ (2026-11-11) Step 1 (`feat/step1`): Add game (manual add), Riot provider (League of Legends, TFT), game-suggestion scan in selected folders, GOG provider. Awaiting the user's manual check; then PR to `main`.
+   - GOG is **not verified** — not tried with a real GOG game (this PC has Galaxy but no games; registry `GOG.com\Games`).
+   - User tried (2026-11-11): Riot/LoL launches, TFT is found, Watch_Dogs (Steam) launches through Ubisoft Connect (normal).
+   - Extra (same branch): uninstalled GOG games from the GOG Galaxy local DB (`C:\ProgramData\GOG.com\Galaxy\storage\galaxy-2.0.db`, read-only) (161 on this PC); "Kapak seç…" (Pick cover…) from the card; games no longer start as a child process of Hangar (PowerShell `Start-Process`, values via env) — a `tauri dev` restart used to kill LoL.
+   - Cover code from the Riot icon exists, but the LoL `.ico` on this PC has no PNG frame → cover set by hand with "Kapak seç…".
+   - No uninstalled games for Epic: no reliable local list, account sign-in needed (separate design).
+   - ✅ (2026-11-11) PR #2 squash-merged into `main`. User tried GOG: "Kur" (Install) on an uninstalled game opens the install in Galaxy.
+6. **Next (2026-11-11, requested by the user):** (a) Uninstalled Epic games (no reliable local list; account sign-in or another source — design first), (b) all owned games in Ubisoft Connect (currently only installed ones, from the registry). Brainstorming + decision first, then plan.
+   - **Decision (user, 2026-11-12): NO Galaxy. Playnite path — in-app connection, data stays only on the user's computer.** (The council had recommended Galaxy; the user rejected it.)
+     - Epic: Hangar opens Epic's own sign-in page in a separate window (Hangar never sees the password), authorization code → OAuth (Legendary/Heroic/Playnite flow, the launcher's public client id), owned games from the Epic library + catalog service. Refresh token only local, encrypted with Windows DPAPI; "Bağlantıyı kes" (Disconnect) deletes it; never logged; no server/telemetry.
+     - Ubisoft: first a short, time-boxed attempt (encrypted local cache vs Ubisoft's own sign-in page + ticket); if no working path is found, only installed games remain.
+     - "Hesaplar" (Accounts) section in Settings; security note in the README (where the token is, how to delete, risk of an unofficial service).
+     - Next session: brainstorming → short design doc → plan → subagent-driven (Sonnet). Risks from the council: Epic may block the client id, the token can access the whole account, DPAPI does not protect against malware under the same user.
+   - ✅ (2026-11-13) **Epic done** — `feat/epic-account` branch (spec `docs/superpowers/specs/2026-11-12-hangar-accounts-design.md`, plan `docs/superpowers/plans/2026-11-12-hangar-epic-account.md`). Design and plan went through the council; all tasks reviewed; final whole-branch review clean. User tried it, PR #3 squash-merged into `main` (2026-11-13).
+     - E0 (live sign-in, 2026-11-12): sign-in with email works, only www.epicgames.com is visited; 240 records (225 games, 15 DLC). Gotcha: the catalog bulk endpoint returns `{}` for comma-joined ids — every id gets its own `id=` parameter. The refresh token rotates on every use, valid ~1 year.
+     - Sign-in window allowlist (`accounts/login.rs` NAV_RULES): Epic + captcha + only the sign-in paths of the providers (host + path prefix, no port). User tried the other sign-ins, they work.
+   - ✅ **Phase 1 finale** — PR #4 squash-merged into `main` (2026-11-13). User liked the UI a lot.
+     - ✅ Other Epic sign-in providers; ✅ Epic/GOG covers (Epic keyImages, Galaxy `originalImages.verticalCover`, fallback `api.gog.com/v2/games/<id>` `_links.boxArtImage`; download host allowlist, no redirects; WebP; per-session failure cache). Reviewed.
+     - ✅ (2026-11-13) **Edition/copy cards — Revision 2** (spec `docs/superpowers/specs/2026-11-13-hangar-editions-design.md`, the REVISION 2 block at the top applies; went through the council). Rule: **one card = one build**. Remastered/Definitive/Enhanced/Complete/GOTY/Gold… are separate cards (user: Infinite and Infinite Complete are separate); copies of the same build (stores, ™, "- Amazon Prime" → "(Prime)", two same-named records in the same store → "· 2. kopya" (2nd copy)) form a single card. Card key: Original → `normalize`, others → `normalize|Label` (rows/covers of original cards are preserved). Preference is per record (`"platform:id"`, old platform value is still read). One badge per store, at most 3 + "+N", tooltip lists all copies. Candidates in the merge picker show store badges.
+       - Dry run (copy of the live DB): `HANGAR_DB=<copy> HANGAR_DRY_OUT=<output.md> cargo test -p hangar-core dry_run_live_cards -- --ignored` — card list + multiple cards with the same base name.
+       - The user had accidentally merged Mafia II DE with Mafia III DE; the override was deleted from the DB (backup in scratchpad).
+     - In debug, `await hangarProbe()` (DevTools) writes cleaned live responses under `%APPDATA%\com.hangar.app\e0\`; it does not go into the repo. Local live test: `HANGAR_EPIC_LIVE_DIR="$APPDATA/com.hangar.app/e0" cargo test -p hangar-core live_ -- --ignored`.
+   - ✅ **PHASE 2 done — PR #5 squash-merged into `main` (2026-11-14); ✅ PHASE 3 done — PR #6 squash-merged into `main`:** collections (membership by record key), tab strip, list view, `theme.json`, Steam priority (with multiple installed copies, Play opens Steam), small gaps.
+   - **PHASE 4 — `feat/phase4` (in progress, not yet on `main`; 2026-11-14):**
+     - Steam sign-in (no API key): persistent WebView2 profile `app_data_dir/webview-steam`; `IPlayerService/GetOwnedGames` from the same page using `data-loyalty_webapi_token` of `application_config` on the store page. Invisible window during scan, 20 s timeout, script no-login signal 12 s; 10 min limit for focus scans, Refresh skips it; if a key exists, the key path is used.
+     - GOG account: Galaxy's public OAuth client `46899977096215655`; `getFilteredProducts mediaType=1`; source choice galaxy/account (galaxy behavior when not connected).
+     - Savable filters (Installed is a virtual built-in; `ui.filter`), collapsible sidebar (`ui.sidebar`, 220/64px), drag a card onto a collection tab (`dragDropEnabled:false`), two Settings tabs: Hesaplar (Accounts) / Özelleştir (Customize).
+     - Amazon Games will not be done (user decision). Desktop exe (NSIS) left for last.
+     - Command/working notes: vitest with node (bun gives a misleading error): `PATH="$APPDATA/fnm/node-versions/v26.13.0/installation:$PATH" node node_modules/vitest/vitest.mjs run`. Separate git worktree + `node_modules` junction for parallel tracks. The user denied screen-control (computer-use) permission → visual checks are left to the user in live testing. The user said "you can always squash-merge into main".
+   - (Old Phase 2 list, history:)
+     1. ✅ (2026-11-14) **Ubisoft Connect sign-in** — the user connected, it works (spec `docs/superpowers/specs/2026-11-14-hangar-ubisoft-account-design.md`; Opus review + fixes done). `UbiClient` (rm_v1 refresh, GraphQL `games(filterBy:{isOwned:true})`, DPAPI `accounts\ubisoft.dat`), row in Hesaplar, single-candidate title match with the installed record for Ubisoft only, `uplay://launch/<spaceId>/0` (opens Connect; could not verify that it goes to the game page — Connect got stuck on "Initializing").
+        - ✅ (2026-11-14) **Full list via demux** (spec `docs/superpowers/specs/2026-11-14-hangar-ubisoft-demux-design.md`): the user saw 7/7 (including Origins, Syndicate). Demux only accepts a ticket obtained with the PC app id `f68a4bb5-…`; the sign-in page stays with the web id, `connect` renews the web rememberMe once with the PC id (the web token becomes invalid), token v2. The TLS server often cuts the handshake → 6 attempts; only TLS1.2 + ECDHE-ECDSA-AES256-GCM-SHA384; clientVersion = installed upc.exe build (13416). `platform_id` is now the numeric product id (same as the registry). If demux fails, it falls back to the GraphQL list. Debug: `hangarUbiDemux()`, `hangarUbiProbe()`, `hangarUbiQuery(body)`.
+     2. Small UI improvements (the user will give details).
+     3. **Desktop exe** (last, when everything is done): `npm run tauri build` → NSIS installer + desktop shortcut.
+     4. ✅ **New GOG game**: automatic rescan on window focus when the Galaxy DB (including WAL) changes (10 s limit).
+     5. ✅ **"- Amazon Luna" suffix**: copy suffix, shown as "(Amazon)" in the menu (user decision); Prime stays "(Prime)".
+     6. ~~Amazon Games provider~~ — the user did not want it (2026-11-14; does not want to install the app).
+     - Working order: council → single question → spec/plan → parallel Sonnet implementation → Opus review → dry run/live check.
+   - **Ubisoft (Phase 2/1):** U0 discovery (connect.ubisoft.com ticket, `rm_v1` refresh, owned games + product id matching the registry), with the user's sign-in; if successful, a short separate plan on top of the shared infrastructure (sign-in window, `SecretStore`, `OwnedLists`, Hesaplar).
+   - Note (2026-11-13): the PC rebooted with a BSOD 14 times in 30 days (mostly 0x1a MEMORY_MANAGEMENT; possibly RAM/platform). One crash filled the git ref and index with zeros — repaired. Running `git fsck` before long jobs is a good idea.
+7. Then the "Known minor gaps" list.
 
-## Belgeler
-- Tasarım (spec): `docs/superpowers/specs/2026-11-09-hangar-design.md`
-- Plan (14 görev, tamamlandı): `docs/superpowers/plans/2026-11-09-hangar-v1.md`
-- Seçilen arayüz yönü: "5 · Kokpit + Vitrin" — referans mockup `docs/design/mockups-melez.html` (ilk sekme).
+## v1.1 ideas (from the user, 2026-11-11 — not designed yet, brainstorming first)
+- Feedback/status after "Oyna" (Play) (e.g. "Sent to Ubisoft Connect", try again).
+- (Done: Riot provider, manual add, GOG — step 5 above.)
+- Take the NVIDIA app's game scan as an example (rea-skill) — reading from local files is fragile; our own providers first.
 
-## Mimari
-- `crates/hangar-core` — saf Rust, Tauri'siz, Linux'ta test edilir: `vdf.rs`, `providers/{steam,epic,ubisoft}.rs` (`LibraryProvider`), `merge.rs` (ad normalizasyonu + birleştirme/ayırma override'ları), `db.rs` (SQLite), `library.rs` (tarama, `resolve`), `artwork.rs` (kapaklar).
-- `src-tauri` — ince katman: `commands.rs` (get_library, rescan, launch, set_preferred, get/save_settings, split_game, merge_games; olaylar `library-updated`, `cover-ready`).
-- `src/` — React 18 + TS + Vite; GSAP, Lenis, @tanstack/react-virtual. `lib/library.ts` içindeki `normalize` Rust `merge::normalize` ile birebir aynı olmalı.
-- Veri: `%APPDATA%\com.hangar.app\hangar.db`, kapaklar `...\covers`.
+## Documents
+- Design (spec): `docs/superpowers/specs/2026-11-09-hangar-design.md`
+- Plan (14 tasks, completed): `docs/superpowers/plans/2026-11-09-hangar-v1.md`
+- Chosen UI direction: "5 · Kokpit + Vitrin" (Cockpit + Showcase) — reference mockup `docs/design/mockups-melez.html` (first tab).
 
-## Komutlar
-- Linux/WSL'de: `cargo test -p hangar-core`, `cargo check -p hangar` (GTK/WebKit dev paketleri gerekir), `npm test`, `npx tsc --noEmit`, `npm run build`.
-- Windows'ta: `npm install`, `npm run tauri dev`, `npm run tauri build` → `src-tauri/target/release/bundle/nsis/Hangar_0.1.0_x64-setup.exe` (not: workspace olduğu için `target/` repo kökünde).
+## Architecture
+- `crates/hangar-core` — pure Rust, no Tauri, tested on Linux: `vdf.rs`, `providers/{steam,epic,ubisoft}.rs` (`LibraryProvider`), `merge.rs` (name normalization + merge/split overrides), `db.rs` (SQLite), `library.rs` (scan, `resolve`), `artwork.rs` (covers).
+- `src-tauri` — thin layer: `commands.rs` (get_library, rescan, launch, set_preferred, get/save_settings, split_game, merge_games; events `library-updated`, `cover-ready`).
+- `src/` — React 18 + TS + Vite; GSAP, Lenis, @tanstack/react-virtual. `normalize` in `lib/library.ts` must match Rust `merge::normalize` exactly.
+- Data: `%APPDATA%\com.hangar.app\hangar.db`, covers in `...\covers`.
 
-## Kurallar (kullanıcının)
-- Önce plan/tasarım, sonra kod (superpowers: brainstorming → writing-plans → subagent-driven-development).
-- Karpathy kuralları (`karpathy-guidelines` skill): istenmeyen özellik yok, cerrahi değişiklik, doğrulanabilir hedef.
-- Alt ajanlar: Sonnet, aynı anda en fazla 2-3.
-- UI işleri için skill'ler: taste-skill, unslop, ui-ux-pro-max, gsap-*; hepsi `~/.claude/skills` altında kurulu (Windows ve WSL).
-- Commit mesajları Türkçe conventional (`feat(core): ...`).
+## Commands
+- On Linux/WSL: `cargo test -p hangar-core`, `cargo check -p hangar` (needs GTK/WebKit dev packages), `npm test`, `npx tsc --noEmit`, `npm run build`.
+- On Windows: `npm install`, `npm run tauri dev`, `npm run tauri build` → `src-tauri/target/release/bundle/nsis/Hangar_0.1.0_x64-setup.exe` (note: since this is a workspace, `target/` is at the repo root).
 
-## Bilinen küçük açıklar (Step 1 incelemelerinden, ertelendi)
-UAC iptali dışında yükseltilmiş başlatma hataları sınırlı bildiriliyor; başlatma betiği `"`'den önceki `\`'yi çiftlemiyor (bugün argümanlar bunu içermiyor); "Kaldır" onay sormuyor; kenar çubuğunda aktif filtrenin satırı sayı 0 olunca kayboluyor; tarama hariç tutması `*crash*` "Crash Bandicoot"u da eler, `unins` önek değil içerir eşleşmesi; bozuk `scan_folders` JSON sessizce boş liste; Riot PBE fixture'ı kullanılmıyor; boş durum metni yeni kaynakları ve "Oyun ekle"yi anmıyor; eksik exe'li yerel kart "Kur · Yerel" diyor; `tauri dev` açıkken Rust düzenlemek uygulamayı yeniden başlatır (oyunlar artık etkilenmez).
+## Rules (the user's)
+- Primary language is English (code, comments, docs, commits). App UI copy stays Turkish. The user speaks Turkish (assistant replies in Turkish).
+- Plan/design first, then code (superpowers: brainstorming → writing-plans → subagent-driven-development).
+- Karpathy rules (`karpathy-guidelines` skill): no unrequested features, surgical changes, verifiable goal.
+- Subagents: Sonnet, at most 2-3 at a time.
+- Skills for UI work: taste-skill, unslop, ui-ux-pro-max, gsap-*; all installed under `~/.claude/skills` (Windows and WSL).
+- Commits: English conventional (`feat(core): ...`), imperative.
 
-## Bilinen küçük açıklar (v1 sonrası)
-Sağ tık menüsü pencere kenarına taşabiliyor; ayarlar penceresinde tam odak tuzağı yok; README'de SteamID notu eksik; Ayarlar'da getSettings iki kez başarısız olursa geri bildirim yok; npm audit 6 açık (hepsi geliştirme araçlarında: vite/esbuild/jsdom zinciri, yerel kullanımda risk yok).
+## Known minor gaps (from Step 1 reviews, deferred)
+Elevated-launch errors other than a UAC cancel are reported only in a limited way; the launch script does not double a `\` before `"` (today's arguments do not contain it); "Kaldır" (Remove) does not ask for confirmation; the row of the active filter in the sidebar disappears when its count is 0; the scan exclusion `*crash*` also drops "Crash Bandicoot", and `unins` is a contains match, not a prefix match; broken `scan_folders` JSON silently becomes an empty list; the Riot PBE fixture is unused; the empty-state text does not mention the new sources and "Oyun ekle" (Add game); a local card with a missing exe says "Kur · Yerel"; editing Rust while `tauri dev` is open restarts the app (games are no longer affected).
+
+## Known minor gaps (post-v1)
+The right-click menu can overflow the window edge; the settings dialog has no full focus trap; the README lacks a SteamID note; no feedback in Settings if getSettings fails twice; npm audit has 6 findings (all in dev tooling: the vite/esbuild/jsdom chain, no risk for local use).

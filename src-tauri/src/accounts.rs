@@ -108,10 +108,10 @@ fn steam_dir(app: &AppHandle) -> Result<std::path::PathBuf, String> {
     Ok(app.path().app_data_dir().map_err(|e| e.to_string())?.join("webview-steam"))
 }
 
-/// Görünür Steam girişi: kalıcı profil; teslim gelirse cred + liste kaydedilir.
+/// Visible Steam login: persistent profile; if a result is delivered, the credential + list are saved.
 async fn connect_steam(app: AppHandle) -> Result<AccountStatus, String> {
     let dir = steam_dir(&app)?;
-    // Süren gizli alım varsa önce kapat; sonucu atılır.
+    // If a hidden fetch is in progress, close it first; its result is discarded.
     if app.get_webview_window(STEAM_LABEL).is_some() {
         steam_scan::bump_generation();
         close_login_window(&app, STEAM_LABEL);
@@ -152,7 +152,7 @@ async fn connect_steam(app: AppHandle) -> Result<AccountStatus, String> {
     }
 }
 
-/// Gizli pencereyle sessiz Steam alımı (en fazla 20 sn). `None` = zaman aşımı.
+/// Silent Steam fetch through a hidden window (at most 20 s). `None` = timeout.
 pub async fn fetch_steam_hidden(app: &AppHandle) -> Option<SteamWeb> {
     let Ok(dir) = steam_dir(app) else { return None };
     let (tx, rx) = std::sync::mpsc::channel::<SteamWeb>();
@@ -179,7 +179,7 @@ pub async fn fetch_steam_hidden(app: &AppHandle) -> Option<SteamWeb> {
     .ok()
     .and_then(|r| r.ok());
     if got.is_none() {
-        close_login_window(app, STEAM_LABEL); // pencere kapanınca akış biter
+        close_login_window(app, STEAM_LABEL); // the flow ends when the window closes
     }
     got
 }
@@ -212,7 +212,7 @@ pub async fn disconnect_account(app: AppHandle, platform: Platform) -> Result<bo
             close_login_window(&app, STEAM_LABEL);
             let dir = steam_dir(&app)?;
             blocking(app, move |a, db| {
-                // WebView2 kapanırken dosyaları kısa süre tutabilir.
+                // WebView2 may hold the files briefly while closing.
                 for i in 0..10 {
                     match std::fs::remove_dir_all(&dir) {
                         Ok(()) => break,

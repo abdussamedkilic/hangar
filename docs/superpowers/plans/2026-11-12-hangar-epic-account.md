@@ -1,104 +1,104 @@
-# Epic Hesap Bağlantısı — Uygulama Planı
+# Epic Account Connection — Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Epic hesabındaki tüm oyunlar (kurulu olmayanlar dahil), Epic'in kendi giriş sayfasıyla uygulama içinden bağlanarak Hangar kütüphanesine gelsin; belge yalnızca bu PC'de, DPAPI ile şifreli dursun.
+**Goal:** All games on the Epic account (including uninstalled ones) arrive in the Hangar library by connecting in-app through Epic's own login page; the credential stays only on this PC, encrypted with DPAPI.
 
-**Architecture:** `hangar-core`'a `accounts` modülü eklenir: Epic HTTP istemcisi (trait arkasında), saf giriş mantığı (gezinme kararı, başlatma betiği), ayrıştırma, belge deposu (DPAPI) ve `EpicClient` akışı. `scan_all` platform başına sahip olunan listeleri alır. `src-tauri` yalnızca ince yapıştırıcıdır: giriş penceresi (`login.rs`), hesap komutları (`accounts.rs`). React tarafında Ayarlar'a "Hesaplar" bölümü gelir.
+**Architecture:** An `accounts` module is added to `hangar-core`: the Epic HTTP client (behind a trait), pure login logic (navigation decision, init script), parsing, the credential store (DPAPI) and the `EpicClient` flow. `scan_all` takes owned lists per platform. `src-tauri` is only thin glue: the login window (`login.rs`) and account commands (`accounts.rs`). On the React side an "Hesaplar" section is added to Settings.
 
 **Tech Stack:** Rust (ureq 2, rusqlite, serde_json, url 2, zeroize 1, windows-sys 0.61), Tauri 2.12.5, React 18 + TS + vitest, `@tauri-apps/plugin-dialog` (`ask`).
 
 **Spec:** `docs/superpowers/specs/2026-11-12-hangar-accounts-design.md`
 
-Bu plan iki konsey turundan geçti (tasarım ve plan).
+This plan went through two council rounds (design and plan).
 
 ## Global Constraints
 
-- **Belge sızmaz:** refresh token, access token, yetki kodu ve id_token hiçbir yere yazılmaz. Buna log, `println!`/`eprintln!`/`dbg!`, hata mesajı, uyarı, SQLite, `settings`, fixture, commit mesajı ve test çıktısı dahildir.
-  - Hata metinleri en fazla HTTP durum kodu ile kısa bir açıklama içerir; yanıt gövdesi ya da URL içermez.
-  - `ureq::Error`'u asla `Display`/`Debug` ile yazdırma. Steam'deki `net_err` deseni izlenir; kill URL'i access token içerir.
-- **Epic istemcisi:** id `34a02cf8f4414e29b15921876da36f9a`, secret `daafbccc737745039dffe53d94fc76cf`, `token_type=eg1`. Bu değerler herkese açıktır ve kodda sabit durur.
-- **Uç noktalar:**
+- **The credential never leaks:** the refresh token, access token, authorization code and id_token are never written anywhere. This includes logs, `println!`/`eprintln!`/`dbg!`, error messages, warnings, SQLite, `settings`, fixtures, commit messages and test output.
+  - Error texts contain at most an HTTP status code and a short description; never a response body or URL.
+  - Never print a `ureq::Error` with `Display`/`Debug`. Follow the `net_err` pattern in Steam; the kill URL contains the access token.
+- **Epic client:** id `34a02cf8f4414e29b15921876da36f9a`, secret `daafbccc737745039dffe53d94fc76cf`, `token_type=eg1`. These values are public and are hardcoded.
+- **Endpoints:**
   - Token: `https://account-public-service-prod03.ol.epicgames.com/account/api/oauth/token`
   - Kill: `DELETE https://account-public-service-prod03.ol.epicgames.com/account/api/oauth/sessions/kill/<access_token>`
-  - Kütüphane: `https://library-service.live.use1a.on.epicgames.com/library/api/public/items?includeMetadata=true[&cursor=…]`
-  - Katalog: `https://catalog-public-service-prod06.ol.epicgames.com/catalog/api/shared/namespace/<ns>/bulk/items?id=<id>[,<id>…]&includeDLCDetails=true&includeMainGameDetails=true&country=US&locale=en-US`
-- **Giriş adresi:** `https://www.epicgames.com/id/login?redirectUrl=https%3A%2F%2Fwww.epicgames.com%2Fid%2Fapi%2Fredirect%3FclientId%3D34a02cf8f4414e29b15921876da36f9a%26responseType%3Dcode`
-- **Yakalama adresi:** `https://hangar.invalid/callback?code=<kod>`
-- **Belge dosyası:** `<app_data_dir>\accounts\epic.dat`
-  - DPAPI CurrentUser, entropi `b"hangar-accounts-v1"`.
-  - Şifrelemeden önceki JSON'da `"v": 1` bulunur.
-  - Yazma geçici dosya + rename ile yapılır.
-- **Zamanlama:** katalog çağrıları arasında en az 100 ms; ağ zaman aşımı 15 s; giriş zaman aşımı 5 dk.
-- **Bağımlılıklar:** `hangar-core` Tauri'ye bağımlı olmaz. Windows'a özgü kod `#[cfg(windows)]` altında, Linux için derlenen bir karşılığı vardır.
-- **Kapsam:** Ubisoft bu planda yok. Arayüz satırı, README metni ya da depo dosyası eklenmez.
-- **Fixture'lar:** depoya yalnızca **elle yazılmış sentetik** fixture'lar girer. Canlı E0 yanıtları yalnızca kullanıcının PC'sinde, `<app_data_dir>\e0\` altında kalır; commit edilmez.
-- **Dil:** arayüz metinleri Türkçe. Commit mesajları Türkçe conventional (`feat(core): …`) ve şu satırla biter: `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
-- **Ortam:** komutlar Windows Git Bash'te, repo kökünde çalışır. Node PATH'te yok; önce şunu çalıştır:
+  - Library: `https://library-service.live.use1a.on.epicgames.com/library/api/public/items?includeMetadata=true[&cursor=…]`
+  - Catalog: `https://catalog-public-service-prod06.ol.epicgames.com/catalog/api/shared/namespace/<ns>/bulk/items?id=<id>[,<id>…]&includeDLCDetails=true&includeMainGameDetails=true&country=US&locale=en-US`
+- **Login URL:** `https://www.epicgames.com/id/login?redirectUrl=https%3A%2F%2Fwww.epicgames.com%2Fid%2Fapi%2Fredirect%3FclientId%3D34a02cf8f4414e29b15921876da36f9a%26responseType%3Dcode`
+- **Capture URL:** `https://hangar.invalid/callback?code=<code>`
+- **Credential file:** `<app_data_dir>\accounts\epic.dat`
+  - DPAPI CurrentUser, entropy `b"hangar-accounts-v1"`.
+  - The JSON before encryption contains `"v": 1`.
+  - Writes go through a temp file + rename.
+- **Timing:** at least 100 ms between catalog calls; network timeout 15 s; login timeout 5 min.
+- **Dependencies:** `hangar-core` does not depend on Tauri. Windows-specific code sits under `#[cfg(windows)]` with a counterpart that compiles on Linux.
+- **Scope:** Ubisoft is not in this plan. No UI row, README text or repo file is added for it.
+- **Fixtures:** only **hand-written synthetic** fixtures go into the repo. Live E0 responses stay only on the user's PC, under `<app_data_dir>\e0\`; they are not committed.
+- **Language:** UI copy is Turkish. Commit messages are English conventional (`feat(core): …`) and end with this line: `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
+- **Environment:** commands run in Windows Git Bash, at the repo root. Node is not on PATH; first run:
   `export PATH="/c/Users/user/AppData/Roaming/fnm/node-versions/v26.13.0/installation:$PATH"`
-- **Testler:** `cargo test -p hangar-core`, `cargo check -p hangar`, `npm test`, `npx tsc --noEmit`.
-  - `src-tauri`'ye test yazılmaz; Tauri test ikilileri Windows'ta kırılgan. Test edilebilir mantık `hangar-core`'da durur.
-- **Commit öncesi sızıntı kontrolü:** her commit öncesi şu komut boş çıkmalı:
+- **Tests:** `cargo test -p hangar-core`, `cargo check -p hangar`, `npm test`, `npx tsc --noEmit`.
+  - No tests are written for `src-tauri`; Tauri test binaries are brittle on Windows. Testable logic lives in `hangar-core`.
+- **Leak check before commit:** before every commit this command must come out empty:
   `git diff --cached -- . ':!Cargo.lock' | grep -nEi '"(access_token|refresh_token|id_token)"\s*:\s*"[^"R]|eg1~|[0-9a-f]{32}' | grep -v 34a02cf8f4414e29b15921876da36f9a | grep -v daafbccc737745039dffe53d94fc76cf`
-  Bir sonuç çıkarsa ve bunun bir sentetik test kimliği olduğundan eminsen, açıklamasını commit mesajına yaz.
+  If a result appears and you are sure it is a synthetic test id, write the explanation in the commit message.
 
 ## Review Focus
 
-1. **Kaldırılmış oyun:** katalog yanıtında hiç bulunmayan bir kimlik sessizce atlanır, tarama düşmez. Test: T4 `catalog_missing_item_skipped`.
-2. **Eşzamanlı yenileme ya da çökme:**
-   - Yeni `refresh_token` kullanılmadan önce kaydedilir.
-   - Kayıt başarısız olursa eski belge silinmez.
-   - İkinci yenileme eski belgeyi kullanmaz.
+1. **Removed game:** an id that is absent from the catalog response is skipped silently, the scan does not fail. Test: T4 `catalog_missing_item_skipped`.
+2. **Concurrent refresh or crash:**
+   - The new `refresh_token` is saved before it is used.
+   - If the save fails, the old credential is not deleted.
+   - A second refresh does not use the old credential.
    - Test: T5c `rotated_token_saved_before_use`, `failed_save_keeps_old_cred`, `refresh_is_serialized`.
-3. **Kesme sırasında tarama:** sürmekte olan bir tarama, "Bağlantıyı kes"ten sonra önbelleği ya da "süresi doldu" durumunu geri yazamaz. Test: T5c `disconnect_wins_over_inflight_scan`.
-4. **Çevrimdışı tarama ve kesme:**
-   - Taramada son bilinen liste gösterilir ve uyarı çıkar.
-   - Kesme yine dosyayı siler ve Epic'teki oturumun kapatılamadığını söyler.
+3. **Scan during disconnect:** a scan in progress cannot write back the cache or the "expired" state after "Bağlantıyı kes". Test: T5c `disconnect_wins_over_inflight_scan`.
+4. **Offline scan and disconnect:**
+   - A scan shows the last known list and a warning appears.
+   - Disconnect still deletes the file and says that the session on Epic could not be closed.
    - Test: T5c `offline_uses_cache_with_warning`, `disconnect_offline_still_deletes`.
-5. **Farklı adlar:** kurulu Epic oyununun manifest adı katalog adından farklıysa tek kart kalır, manifest adı korunur, `install_uri` güncellenir. Test: T1 `owned_epic_keeps_manifest_title`.
+5. **Different names:** if the manifest name of an installed Epic game differs from the catalog name, a single card remains, the manifest name is kept, and `install_uri` is updated. Test: T1 `owned_epic_keeps_manifest_title`.
 
-## Sıra ve paralellik
+## Order and parallelism
 
-| Sıra | Görev | Bağlı olduğu | Paralel çalışabilir |
+| Order | Task | Depends on | Can run in parallel |
 |---|---|---|---|
 | 1 | T1 `scan_all` | — | T2, T3a |
-| 2 | T2 Epic istemcisi + tipler + temizleyici | — | T1, T3a |
-| 3 | T3a Saf giriş mantığı (core) | — | T1, T2 |
-| 4 | T3b Giriş penceresi + E0 probe → **E0 (kullanıcı)** | T2, T3a | T4 |
-| 5 | T4 Ayrıştırma (sentetik fixture) | T2 | T3b / E0 |
-| 6 | T4b Canlı yanıtlarla doğrulama (yerel) | T4, E0 | — |
+| 2 | T2 Epic client + types + sanitizer | — | T1, T3a |
+| 3 | T3a Pure login logic (core) | — | T1, T2 |
+| 4 | T3b Login window + E0 probe → **E0 (user)** | T2, T3a | T4 |
+| 5 | T4 Parsing (synthetic fixture) | T2 | T3b / E0 |
+| 6 | T4b Verification with live responses (local) | T4, E0 | — |
 | 7 | T5a `SecretStore` + DPAPI | T2 | T5b |
-| 8 | T5b DB tabloları | T4 | T5a |
-| 9 | T5c `EpicClient` akışı — **denetçi inceleme kapısı** | T4, T5a, T5b | — |
-| 10 | T6 Tauri komutları + tarama bağlantısı | T1, T3b, T5c | T7 |
-| 11 | T7 Hesaplar arayüzü | T5c'nin `AccountStatus` şekli | T6 |
-| 12 | T8 README, elle kontrol, release duman testi | hepsi | — |
+| 8 | T5b DB tables | T4 | T5a |
+| 9 | T5c `EpicClient` flow — **reviewer gate** | T4, T5a, T5b | — |
+| 10 | T6 Tauri commands + scan wiring | T1, T3b, T5c | T7 |
+| 11 | T7 Accounts UI | the `AccountStatus` shape from T5c | T6 |
+| 12 | T8 README, manual check, release smoke test | all | — |
 
-**E0 başarısız olursa:** T6 ve T7 durur, T3b'nin pencere kısmı atılır. Kullanıcıya yaklaşım B (kodu elle yapıştırma) sorulur. T1, T2, T4 ve T5 her iki yolda da geçerlidir.
+**If E0 fails:** T6 and T7 stop, and the window part of T3b is dropped. The user is asked about approach B (pasting the code by hand). T1, T2, T4 and T5 remain valid on both paths.
 
 ---
 
-### Task 1: `scan_all` sahip olunan listeleri platform başına alsın
+### Task 1: `scan_all` takes owned lists per platform
 
 **Files:**
-- Modify: `crates/hangar-core/src/library.rs` (`scan_all` ve testleri)
-- Modify: `src-tauri/src/commands.rs` (`scan` içindeki `scan_all` çağrısı)
+- Modify: `crates/hangar-core/src/library.rs` (`scan_all` and its tests)
+- Modify: `src-tauri/src/commands.rs` (the `scan_all` call inside `scan`)
 
 **Interfaces:**
 - Produces:
   - `pub type OwnedLists = Vec<(Platform, Result<Vec<PlatformEntry>, ProviderError>)>;`
   - `pub fn scan_all(db: &Db, providers: &[Box<dyn LibraryProvider>], owned: OwnedLists) -> rusqlite::Result<ScanReport>`
-- **Birleşme kuralı:** aynı `platform` ve `platform_id` ile kurulu bir kayıt varsa kurulu kayıt kalır, ama şu alanlar güncellenir:
-  - `playtime_min`: sahip olunanda Some ise oradan alınır.
+- **Merge rule:** if an installed entry with the same `platform` and `platform_id` exists, the installed entry stays, but these fields are updated:
+  - `playtime_min`: taken from the owned entry if it is Some.
   - `last_played`: `installed.last_played.or(owned.last_played)`.
-  - `install_uri`: sahip olunanda Some ise onunla değiştirilir.
-  - `title` asla değişmez.
-  - Eşleşme yoksa sahip olunan kayıt eklenir.
-- **`Err` uyarıları:**
-  - Steam için mevcut metin aynen kalır: `"Steam sahip olunan oyunlar alınamadı: API anahtarını kontrol et."`.
-  - Diğer platformlar için `format!("{:?} sahip olunan oyunlar alınamadı.", platform)`.
+  - `install_uri`: replaced with the owned entry's if it is Some.
+  - `title` never changes.
+  - If there is no match, the owned entry is added.
+- **`Err` warnings:**
+  - For Steam the existing text stays as is: `"Steam sahip olunan oyunlar alınamadı: API anahtarını kontrol et."`.
+  - For other platforms `format!("{:?} sahip olunan oyunlar alınamadı.", platform)`.
 
-- [ ] **Step 1: Mevcut testleri yeni imzaya çevir ve yeni testleri ekle.** Dönüşüm kuralları: `scan_all(.., None)` → `vec![]`, `Some(x)` → `vec![(Platform::Steam, x)]`. Eklenecek testler:
+- [ ] **Step 1: Convert the existing tests to the new signature and add the new tests.** Conversion rules: `scan_all(.., None)` → `vec![]`, `Some(x)` → `vec![(Platform::Steam, x)]`. Tests to add:
 
 ```rust
 #[test]
@@ -138,14 +138,14 @@ fn non_steam_owned_error_warning() {
 }
 ```
 
-- [ ] **Step 2:** `cargo test -p hangar-core library` → derleme hatası ya da FAIL.
-- [ ] **Step 3:** `scan_all`'u kurala göre yaz. `commands.rs::scan` içinde Steam sonucunu şöyle geçir: `let owned: OwnedLists = owned.into_iter().map(|r| (Platform::Steam, r)).collect();`.
-- [ ] **Step 4:** `cargo test -p hangar-core` ve `cargo check -p hangar` → PASS.
-- [ ] **Step 5:** Sızıntı kontrolü yap, sonra commit et: `refactor(core): scan_all sahip olunan listeleri platform başına alır`.
+- [ ] **Step 2:** `cargo test -p hangar-core library` → compile error or FAIL.
+- [ ] **Step 3:** Write `scan_all` according to the rule. In `commands.rs::scan`, pass the Steam result like this: `let owned: OwnedLists = owned.into_iter().map(|r| (Platform::Steam, r)).collect();`.
+- [ ] **Step 4:** `cargo test -p hangar-core` and `cargo check -p hangar` → PASS.
+- [ ] **Step 5:** Run the leak check, then commit: `refactor(core): scan_all takes owned lists per platform`.
 
 ---
 
-### Task 2: Epic HTTP istemcisi, belge tipleri ve temizleyici
+### Task 2: Epic HTTP client, credential types and sanitizer
 
 **Files:**
 - Create: `crates/hangar-core/src/accounts/mod.rs`, `crates/hangar-core/src/accounts/epic_api.rs`, `crates/hangar-core/src/accounts/sanitize.rs`
@@ -154,36 +154,36 @@ fn non_steam_owned_error_warning() {
 
 **Interfaces:**
 - `accounts/mod.rs`:
-  - `#[derive(Debug, Clone, PartialEq)] pub enum AuthError { NotConnected, Corrupt, InvalidGrant, Network(String), Parse(String) }` ve `impl Display`. Display metinleri:
+  - `#[derive(Debug, Clone, PartialEq)] pub enum AuthError { NotConnected, Corrupt, InvalidGrant, Network(String), Parse(String) }` and `impl Display`. Display texts:
     - `NotConnected`: "Epic bağlı değil"
     - `Corrupt`: "Epic bağlantısı okunamadı"
     - `InvalidGrant`: "Epic bağlantısının süresi doldu"
     - `Network(s)`: `format!("Epic'e ulaşılamadı ({s})")`
     - `Parse(s)`: `format!("Epic yanıtı anlaşılamadı ({s})")`
   - `#[derive(Serialize, Deserialize, Clone, PartialEq)] pub struct StoredCred { pub v: u32, pub refresh_token: String, pub refresh_expires_at: String, pub account_id: String, pub display_name: String }`
-    - Elle yazılmış `Debug`: `refresh_token` ve `account_id` alanları `"***"` gösterir.
-    - `impl Drop`: `refresh_token`'ı `zeroize` ile sıfırlar.
-  - `pub struct Tokens { pub access_token: String, pub cred: StoredCred }`: elle `Debug` (`***`) ve `Drop`'ta `access_token` için `zeroize`.
+    - Hand-written `Debug`: the `refresh_token` and `account_id` fields show `"***"`.
+    - `impl Drop`: zeroes `refresh_token` with `zeroize`.
+  - `pub struct Tokens { pub access_token: String, pub cred: StoredCred }`: hand-written `Debug` (`***`) and `zeroize` for `access_token` on `Drop`.
   - `pub fn parse_token(json: &str) -> Result<Tokens, AuthError>`
-    - Okunan alanlar: `access_token`, `refresh_token`, `refresh_expires_at`, `account_id`, `displayName`.
-    - `v` her zaman 1'dir.
-    - Eksik alan varsa `Err(Parse("token"))` döner; mesaja gövde girmez.
+    - Fields read: `access_token`, `refresh_token`, `refresh_expires_at`, `account_id`, `displayName`.
+    - `v` is always 1.
+    - If a field is missing it returns `Err(Parse("token"))`; the body does not enter the message.
 - `accounts/epic_api.rs`:
   - `pub trait EpicApi: Send + Sync { fn token(&self, form: &[(&str, &str)]) -> Result<String, AuthError>; fn library_page(&self, access: &str, cursor: Option<&str>) -> Result<String, AuthError>; fn catalog(&self, access: &str, namespace: &str, ids: &[String]) -> Result<String, AuthError>; fn kill(&self, access: &str) -> Result<(), AuthError>; }`
-    - Yanıt gövdeleri ham dize olarak döner.
-  - `pub struct HttpEpicApi;`, ureq kullanır.
-    - Token ucunda HTTP 400/401 → `AuthError::InvalidGrant`.
-    - Diğer HTTP durumları → `Network(format!("durum {code}"))`.
-    - Taşıma hatası → `Network(format!("{:?}", t.kind()))`.
-    - Zaman aşımı 15 s.
-  - `pub const BASIC_AUTH: &str = "MzRhMDJjZjhmNDQxNGUyOWIxNTkyMTg3NmRhMzZmOWE6ZGFhZmJjY2M3Mzc3NDUwMzlkZmZlNTNkOTRmYzc2Y2Y=";` (başlık `Authorization: basic <BASIC_AUTH>`)
-  - `pub const LOGIN_URL: &str`: Global Constraints'teki giriş adresi.
+    - Response bodies return as raw strings.
+  - `pub struct HttpEpicApi;`, uses ureq.
+    - On the token endpoint HTTP 400/401 → `AuthError::InvalidGrant`.
+    - Other HTTP statuses → `Network(format!("durum {code}"))`.
+    - Transport error → `Network(format!("{:?}", t.kind()))`.
+    - Timeout 15 s.
+  - `pub const BASIC_AUTH: &str = "MzRhMDJjZjhmNDQxNGUyOWIxNTkyMTg3NmRhMzZmOWE6ZGFhZmJjY2M3Mzc3NDUwMzlkZmZlNTNkOTRmYzc2Y2Y=";` (header `Authorization: basic <BASIC_AUTH>`)
+  - `pub const LOGIN_URL: &str`: the login URL from Global Constraints.
 - `accounts/sanitize.rs`: `pub fn sanitize(body: &str, secrets: &[&str]) -> Result<String, String>`
-  - Gövde JSON ise şu anahtarların değerleri `"REDACTED"` yapılır: `access_token`, `refresh_token`, `id_token`, `account_id`, `accountId`, `displayName`, `email`, `ownerId`, `authorizationCode`, `sid`. İç içe nesneler de dolaşılır.
-  - Sonra `secrets` listesindeki her **boş olmayan** değer metinde `"REDACTED"` ile değiştirilir.
-  - Sonuçta boş olmayan bir secret hâlâ geçiyorsa `Err("sızıntı")` döner.
+  - If the body is JSON, the values of these keys become `"REDACTED"`: `access_token`, `refresh_token`, `id_token`, `account_id`, `accountId`, `displayName`, `email`, `ownerId`, `authorizationCode`, `sid`. Nested objects are traversed too.
+  - Then every **non-empty** value in the `secrets` list is replaced with `"REDACTED"` in the text.
+  - If a non-empty secret still appears in the result, it returns `Err("sızıntı")`.
 
-- [ ] **Step 1: Testleri yaz.**
+- [ ] **Step 1: Write the tests.**
 
 ```rust
 // accounts/mod.rs
@@ -224,28 +224,28 @@ fn non_json_and_empty_secret() {
 ```
 
 - [ ] **Step 2:** `cargo test -p hangar-core accounts` → FAIL.
-- [ ] **Step 3:** Uygula.
+- [ ] **Step 3:** Implement.
 - [ ] **Step 4:** `cargo test -p hangar-core` → PASS.
-- [ ] **Step 5:** Sızıntı kontrolü, ardından commit: `feat(core): epic http istemcisi, belge tipleri ve temizleyici`.
+- [ ] **Step 5:** Leak check, then commit: `feat(core): epic http client, credential types and sanitizer`.
 
 ---
 
-### Task 3a: Saf giriş mantığı (core)
+### Task 3a: Pure login logic (core)
 
 **Files:**
-- Create: `crates/hangar-core/src/accounts/login.rs` (modülü `accounts/mod.rs`'te `pub mod login;` ile aç)
+- Create: `crates/hangar-core/src/accounts/login.rs` (open the module in `accounts/mod.rs` with `pub mod login;`)
 - Modify: `crates/hangar-core/Cargo.toml`: `url = "2"`
 
 **Interfaces:**
 - `pub enum NavDecision { Callback(String), Allow, Block }`
 - `pub fn decide(url: &url::Url) -> NavDecision`
-  - Şu koşulların hepsi tutarsa `Callback(code)` döner: şema `https`, host `hangar.invalid`, yol `/callback`, `code` parametresi boş değil. Kod yüzde çözülmüş haliyle döner.
-  - Yalnızca host `hangar.invalid` ise ve diğer koşullar tutmuyorsa `Block`.
-  - Şema `https` ise ve host `ALLOWED_HOSTS`'taki bir değere eşit ya da onun alt alanıysa (`host == h || host.ends_with(&format!(".{h}"))`) `Allow`.
-  - Diğer her durumda `Block`.
+  - Returns `Callback(code)` if all of these hold: scheme `https`, host `hangar.invalid`, path `/callback`, the `code` parameter is non-empty. The code is returned percent-decoded.
+  - If only the host is `hangar.invalid` and the other conditions do not hold, `Block`.
+  - If the scheme is `https` and the host equals a value in `ALLOWED_HOSTS` or is a subdomain of one (`host == h || host.ends_with(&format!(".{h}"))`), `Allow`.
+  - In every other case `Block`.
 - `pub const ALLOWED_HOSTS: &[&str] = &["epicgames.com", "epicgames.dev", "unrealengine.com", "hcaptcha.com", "arkoselabs.com", "funcaptcha.com", "google.com", "apple.com", "live.com", "microsoftonline.com", "xbox.com", "steampowered.com", "steamcommunity.com", "playstation.com", "sonyentertainmentnetwork.com", "nintendo.com", "facebook.com"];`
-  - Gerekçe: Epic, bu sağlayıcılarla girişi kendi sayfasından yönlendirir. Liste yalnızca üst çerçeve gezinmelerini sınırlar; sayfa içi kaynaklar ve iframe'ler bundan etkilenmez.
-- `pub const INIT_SCRIPT: &str`: aşağıdaki davranış, tümüyle `try/catch` içinde:
+  - Rationale: Epic redirects sign-in with these providers from its own page. The list restricts only top-frame navigations; in-page resources and iframes are not affected.
+- `pub const INIT_SCRIPT: &str`: the behavior below, entirely inside `try/catch`:
 
 ```js
 (function(){try{
@@ -261,10 +261,10 @@ fn non_json_and_empty_secret() {
 
 - `pub fn window_title(url: &url::Url) -> String`: `format!("Epic Games girişi — {}", url.host_str().unwrap_or(""))`.
 - `pub fn open_error(uri: &str, err: &str) -> String`
-  - `uri` `com.epicgames.launcher://` ile başlıyorsa `"Epic Games Launcher açılamadı — kurulu mu?"`.
-  - Aksi halde `format!("Açılamadı: {err}")`.
+  - If `uri` starts with `com.epicgames.launcher://`, `"Epic Games Launcher açılamadı — kurulu mu?"`.
+  - Otherwise `format!("Açılamadı: {err}")`.
 
-- [ ] **Step 1: Testleri yaz.**
+- [ ] **Step 1: Write the tests.**
 
 ```rust
 fn u(s: &str) -> url::Url { url::Url::parse(s).unwrap() }
@@ -293,17 +293,17 @@ fn u(s: &str) -> url::Url { url::Url::parse(s).unwrap() }
 ```
 
 - [ ] **Step 2:** FAIL.
-- [ ] **Step 3:** Uygula.
+- [ ] **Step 3:** Implement.
 - [ ] **Step 4:** `cargo test -p hangar-core` → PASS.
-- [ ] **Step 5:** Commit: `feat(core): epic giriş penceresi için saf gezinme kuralları`.
+- [ ] **Step 5:** Commit: `feat(core): pure navigation rules for the epic login window`.
 
 ---
 
-### Task 3b: Giriş penceresi ve E0 probe (ince yapıştırıcı) → E0 kontrol noktası
+### Task 3b: Login window and E0 probe (thin glue) → E0 checkpoint
 
 **Files:**
 - Create: `src-tauri/src/login.rs`
-- Modify: `src-tauri/src/main.rs`, `src/lib/api.ts` (yalnızca DEV satırı)
+- Modify: `src-tauri/src/main.rs`, `src/lib/api.ts` (DEV line only)
 
 **Interfaces:**
 - Consumes:
@@ -311,55 +311,55 @@ fn u(s: &str) -> url::Url { url::Url::parse(s).unwrap() }
   - T2: `accounts::epic_api::{LOGIN_URL, HttpEpicApi, EpicApi}`, `accounts::parse_token`, `accounts::sanitize::sanitize`
 - Produces:
   - `pub enum LoginError { Cancelled, Timeout, AlreadyOpen, Window(String) }`
-  - `pub async fn login(app: &AppHandle) -> Result<String, LoginError>`: başarıda yetki kodunu döner.
-- **`login` davranışı:**
-  1. `account-login` etiketli pencere varsa `set_focus` yapar ve `Err(AlreadyOpen)` döner.
+  - `pub async fn login(app: &AppHandle) -> Result<String, LoginError>`: returns the authorization code on success.
+- **`login` behavior:**
+  1. If a window labeled `account-login` exists, it calls `set_focus` and returns `Err(AlreadyOpen)`.
   2. `let (tx, rx) = std::sync::mpsc::channel::<Result<String, LoginError>>();`
-  3. Pencere: `WebviewWindowBuilder::new(app, "account-login", WebviewUrl::External(LOGIN_URL.parse().unwrap()))`, şu ayarlarla:
+  3. Window: `WebviewWindowBuilder::new(app, "account-login", WebviewUrl::External(LOGIN_URL.parse().unwrap()))`, with these settings:
      - `.title(window_title(..))`, `.incognito(true)`, `.initialization_script(INIT_SCRIPT)`, `.inner_size(520.0, 760.0)`.
-     - `.on_navigation(move |url| …)`: `decide(url)` sonucuna göre:
-       - `Callback(c)` → `tx.send(Ok(c))` ve `false` döner.
-       - `Allow` → pencere başlığını `window_title(url)` yapar (`app.get_webview_window("account-login")` ile; bu `async_runtime::spawn` içinde yapılır), `true` döner.
-       - `Block` → `false` döner.
-       - Kapanış içinde hiçbir şey loglanmaz.
-     - `.on_new_window(...)` → `NewWindowResponse::Deny`. URL izinliyse `async_runtime::spawn` ile aynı pencerede `navigate(url)` yapılır.
-     - `.build()` hatası `Err(Window(..))` döner. Hata metni E0'da incognito/kullanıcı veri klasörü çakışmasını (0x8007139F) gösterir.
-  4. `window.on_window_event`: `WindowEvent::Destroyed` → `tx2.send(Err(Cancelled))`. İlk gelen mesaj kazanır.
-  5. `spawn_blocking(move || rx.recv_timeout(Duration::from_secs(300)))`. Zaman aşımında `Err(Timeout)`.
-  6. Sonuçtan sonra pencere (hâlâ varsa) `close()` ile kapatılır.
+     - `.on_navigation(move |url| …)`: depending on the `decide(url)` result:
+       - `Callback(c)` → `tx.send(Ok(c))` and returns `false`.
+       - `Allow` → sets the window title to `window_title(url)` (via `app.get_webview_window("account-login")`; this is done inside `async_runtime::spawn`), returns `true`.
+       - `Block` → returns `false`.
+       - Nothing is logged inside the closure.
+     - `.on_new_window(...)` → `NewWindowResponse::Deny`. If the URL is allowed, `navigate(url)` is done in the same window via `async_runtime::spawn`.
+     - A `.build()` error returns `Err(Window(..))`. In E0 the error text shows the incognito/user data folder conflict (0x8007139F).
+  4. `window.on_window_event`: `WindowEvent::Destroyed` → `tx2.send(Err(Cancelled))`. The first message to arrive wins.
+  5. `spawn_blocking(move || rx.recv_timeout(Duration::from_secs(300)))`. On timeout `Err(Timeout)`.
+  6. After the result, the window (if it still exists) is closed with `close()`.
 - **`debug_epic_probe`:** `#[cfg(debug_assertions)] #[tauri::command] pub async fn debug_epic_probe(app: AppHandle) -> Result<String, String>`
-  1. `login` çalıştırılır.
-  2. `token(authorization_code)` alınır.
-  3. Bir `KillOnDrop` koruyucusu kurulur; hata olsa bile `api.kill(access)` çağrılır.
-  4. Kütüphane sayfaları `serde_json::Value` ile dolaşılır (`responseMetadata.nextCursor`). Bu görevde T4'e bağımlılık yok.
-  5. Gelen kayıtlardan ilk 3 namespace için katalog istenir.
-  6. Her gövde `sanitize(body, &[code, access, refresh, account_id, display_name])` ile temizlenir. Token yanıtı da temizlenerek yazılır.
-  7. Dosyalar `<app_data_dir>/e0/` altına yazılır: `live-token.json`, `live-library-<n>.json`, `live-catalog-<n>.json`. **Repoya yazılmaz.**
-  8. Dönüş metni: yazılan dosya sayısı ve klasör yolu.
-  9. Belge hiçbir dosyaya yazılmaz.
+  1. `login` is run.
+  2. `token(authorization_code)` is obtained.
+  3. A `KillOnDrop` guard is set up; `api.kill(access)` is called even on error.
+  4. Library pages are traversed with `serde_json::Value` (`responseMetadata.nextCursor`). In this task there is no dependency on T4.
+  5. Catalog is requested for the first 3 namespaces from the incoming records.
+  6. Each body is cleaned with `sanitize(body, &[code, access, refresh, account_id, display_name])`. The token response is also written after being cleaned.
+  7. Files are written under `<app_data_dir>/e0/`: `live-token.json`, `live-library-<n>.json`, `live-catalog-<n>.json`. **Nothing is written to the repo.**
+  8. Return text: the number of files written and the folder path.
+  9. The credential is not written to any file.
 - **`main.rs`:**
   - `mod login;`
-  - `debug_epic_probe` iki ayrı `invoke_handler` dalıyla kaydedilir: `#[cfg(debug_assertions)]` dalında komut listede, `#[cfg(not(debug_assertions))]` dalında yok.
-- **`api.ts` sonu:** `if (import.meta.env.DEV) (window as unknown as { hangarProbe: () => Promise<string> }).hangarProbe = () => invoke<string>("debug_epic_probe");`
+  - `debug_epic_probe` is registered with two separate `invoke_handler` branches: the command is in the list under `#[cfg(debug_assertions)]` and absent under `#[cfg(not(debug_assertions))]`.
+- **End of `api.ts`:** `if (import.meta.env.DEV) (window as unknown as { hangarProbe: () => Promise<string> }).hangarProbe = () => invoke<string>("debug_epic_probe");`
 
-- [ ] **Step 1:** Uygula. Test yok; mantık T3a'da test edildi.
-- [ ] **Step 2:** `cargo check -p hangar` ve `cargo build -p hangar --release` → PASS. Release ikilisinde `debug_epic_probe` dizesi olmamalı: `grep -c debug_epic_probe target/release/hangar.exe` → `0`.
-- [ ] **Step 3:** Sızıntı kontrolü, ardından commit: `feat(app): epic giriş penceresi ve E0 keşif komutu`.
-- [ ] **Step 4: E0 KONTROL NOKTASI (denetçi + kullanıcı, Windows).**
-  1. `npm run tauri dev` başlatılır.
-  2. Ana pencerede sağ tık › "Inspect" ile ya da `Ctrl+Shift+I` ile DevTools açılır, Console'a `await hangarProbe()` yazılır.
-  3. Epic penceresinde kullanıcı kendi hesabıyla girer (2FA dahil).
-  - **Geçti sayılması için hepsi gerekli:**
-    1. Pencere başlığı host'u gösteriyor; giriş sonrası pencere kendiliğinden kapanıyor.
-    2. `%APPDATA%\com.hangar.app\e0\` altında `live-token.json` ve en az bir `live-library-0.json` ve `live-catalog-0.json` var.
-    3. Kullanıcı bu klasörde kendi Epic kullanıcı adını ve e-postasını `Select-String -Path "$env:APPDATA\com.hangar.app\e0\*" -Pattern "<kullanıcı adı>","<e-posta>"` ile arıyor ve **sonuç boş** çıkıyor. `live-token.json`'da token alanları `REDACTED`.
-    4. Önce `%LOCALAPPDATA%\com.hangar.app\EBWebView` klasörünün **var olduğu** doğrulanır; yoksa bu madde "doğrulanamadı" sayılır, geçti sayılmaz. Sonra `Get-ChildItem -Recurse "$env:LOCALAPPDATA\com.hangar.app\EBWebView" -Filter Cookies* | Select-String -Pattern "epicgames" -SimpleMatch` boş çıkıyor.
-    5. Konsoldaki dönüşte engellenen bir giriş sağlayıcısı yok; varsa host'u `ALLOWED_HOSTS`'a eklenir (T3a'ya küçük düzeltme commit'i).
-  - **Başarısız (dur):** captcha ya da bot kontrolü geçilemiyor; Epic istemci kimliğini reddediyor (token çağrısı 400/401 ama kod alınmış); pencere `0x8007139F` ya da benzeri bir hatayla açılmıyor; 5 dk zaman aşımı tekrarlanıyor. Bu durumda T6 ve T7 başlamaz ve kullanıcıya yaklaşım B sorulur.
+- [ ] **Step 1:** Implement. No tests; the logic was tested in T3a.
+- [ ] **Step 2:** `cargo check -p hangar` and `cargo build -p hangar --release` → PASS. The release binary must not contain the string `debug_epic_probe`: `grep -c debug_epic_probe target/release/hangar.exe` → `0`.
+- [ ] **Step 3:** Leak check, then commit: `feat(app): epic login window and E0 discovery command`.
+- [ ] **Step 4: E0 CHECKPOINT (reviewer + user, Windows).**
+  1. `npm run tauri dev` is started.
+  2. In the main window, open DevTools with right-click › "Inspect" or `Ctrl+Shift+I`, and type `await hangarProbe()` in the Console.
+  3. In the Epic window the user signs in with their own account (including 2FA).
+  - **All of these are required to count as passed:**
+    1. The window title shows the host; after login the window closes on its own.
+    2. Under `%APPDATA%\com.hangar.app\e0\` there are `live-token.json` and at least one `live-library-0.json` and `live-catalog-0.json`.
+    3. In this folder the user searches for their own Epic username and email with `Select-String -Path "$env:APPDATA\com.hangar.app\e0\*" -Pattern "<username>","<email>"` and the **result is empty**. In `live-token.json` the token fields are `REDACTED`.
+    4. First verify that the `%LOCALAPPDATA%\com.hangar.app\EBWebView` folder **exists**; if it does not, this item counts as "could not be verified", not passed. Then `Get-ChildItem -Recurse "$env:LOCALAPPDATA\com.hangar.app\EBWebView" -Filter Cookies* | Select-String -Pattern "epicgames" -SimpleMatch` comes out empty.
+    5. In the console output there is no blocked login provider; if there is, its host is added to `ALLOWED_HOSTS` (a small fix commit to T3a).
+  - **Failed (stop):** captcha or bot check cannot be passed; Epic rejects the client id (token call 400/401 but a code was obtained); the window does not open with `0x8007139F` or a similar error; the 5-minute timeout repeats. In this case T6 and T7 do not start and the user is asked about approach B.
 
 ---
 
-### Task 4: Kütüphane ve katalog ayrıştırma, filtre, kayıt üretimi (sentetik fixture)
+### Task 4: Library and catalog parsing, filter, entry generation (synthetic fixture)
 
 **Files:**
 - Create: `crates/hangar-core/src/accounts/epic.rs` (`pub mod epic;`)
@@ -368,30 +368,30 @@ fn u(s: &str) -> url::Url { url::Url::parse(s).unwrap() }
 **Interfaces:**
 - `#[derive(Debug, Clone, PartialEq)] pub struct LibItem { pub namespace: String, pub catalog_item_id: String, pub app_name: String }`
 - `pub fn parse_library_page(json: &str) -> Result<(Vec<LibItem>, Option<String>), AuthError>`
-  - `records[]` içinden `namespace`, `catalogItemId`, `appName` okunur.
-  - İmleç `responseMetadata.nextCursor`'dan gelir; yoksa ya da boşsa `None`.
-  - `namespace == "ue"` olanlar ve `appName`'i boş olanlar atlanır.
+  - `namespace`, `catalogItemId`, `appName` are read from `records[]`.
+  - The cursor comes from `responseMetadata.nextCursor`; `None` if absent or empty.
+  - Entries with `namespace == "ue"` and those with an empty `appName` are skipped.
 - `#[derive(Debug, Clone, PartialEq)] pub struct CatalogInfo { pub title: String, pub is_game: bool }`
 - `pub fn parse_catalog(json: &str) -> Result<HashMap<String, CatalogInfo>, AuthError>`
-  - Kök nesnenin anahtarı `catalogItemId`; değerden `title`, `categories[].path` ve `mainGameItem` okunur.
-  - `is_game` şu üç koşulun hepsi tutunca true: `mainGameItem` yok; `categories` içinde `addons` ya da `digitalextras` yok; `categories` `applications` içeriyorsa `games` da içeriyor.
+  - The root object's key is `catalogItemId`; `title`, `categories[].path` and `mainGameItem` are read from the value.
+  - `is_game` is true when all three conditions hold: no `mainGameItem`; `categories` has neither `addons` nor `digitalextras`; if `categories` contains `applications`, it also contains `games`.
 - `pub fn owned_entries(items: &[LibItem], catalog: &HashMap<String, CatalogInfo>) -> Vec<PlatformEntry>`
-  - Katalogda bulunmayan ya da `!is_game` olan kayıtlar atlanır.
-  - `platform: Epic`, `platform_id: app_name`, `title`, `installed: false`, diğer isteğe bağlı alanlar `None`, `launch_args: vec![]`.
+  - Entries that are not in the catalog or are `!is_game` are skipped.
+  - `platform: Epic`, `platform_id: app_name`, `title`, `installed: false`, other optional fields `None`, `launch_args: vec![]`.
   - `launch_uri = format!("com.epicgames.launcher://apps/{ns}%3A{id}%3A{app}?action=launch&silent=true")`
   - `install_uri = Some(format!("com.epicgames.launcher://apps/{ns}%3A{id}%3A{app}?action=install"))`
-- **Sentetik fixture içerikleri:**
+- **Synthetic fixture contents:**
   - `synthetic-library-0.json`:
     `{"responseMetadata":{"nextCursor":"CUR1"},"records":[{"namespace":"ns1","catalogItemId":"game1","appName":"Fig","sandboxType":"PUBLIC"},{"namespace":"ue","catalogItemId":"ue1","appName":"UeAsset"},{"namespace":"ns2","catalogItemId":"dlc1","appName":"FigDlc"}]}`
   - `synthetic-library-1.json`:
     `{"responseMetadata":{},"records":[{"namespace":"ns3","catalogItemId":"app1","appName":"Tool"},{"namespace":"ns4","catalogItemId":"gone","appName":"Gone"}]}`
-  - `synthetic-catalog.json` (anahtar → değer):
+  - `synthetic-catalog.json` (key → value):
     - `game1`: `{"title":"Death's Door","categories":[{"path":"games"},{"path":"applications"}]}`
     - `dlc1`: `{"title":"Fig DLC","categories":[{"path":"addons"}],"mainGameItem":{"id":"game1"}}`
     - `extra1`: `{"title":"Soundtrack","categories":[{"path":"digitalextras"}]}`
     - `app1`: `{"title":"Tool","categories":[{"path":"applications"}]}`
 
-- [ ] **Step 1: Testleri yaz.**
+- [ ] **Step 1: Write the tests.**
 
 ```rust
 fn fx(n: &str) -> String { std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/epic").join(n)).unwrap() }
@@ -425,27 +425,27 @@ fn fx(n: &str) -> String { std::fs::read_to_string(std::path::Path::new(env!("CA
 ```
 
 - [ ] **Step 2:** FAIL.
-- [ ] **Step 3:** Uygula.
+- [ ] **Step 3:** Implement.
 - [ ] **Step 4:** `cargo test -p hangar-core` → PASS.
-- [ ] **Step 5:** Commit: `feat(core): epic kütüphane ve katalog ayrıştırma`.
+- [ ] **Step 5:** Commit: `feat(core): epic library and catalog parsing`.
 
 ---
 
-### Task 4b: Canlı yanıtlarla doğrulama (yalnızca yerel, E0'dan sonra)
+### Task 4b: Verification with live responses (local only, after E0)
 
-**Files:** Modify `crates/hangar-core/src/accounts/epic.rs` (testler)
+**Files:** Modify `crates/hangar-core/src/accounts/epic.rs` (tests)
 
-- [ ] **Step 1:** `#[ignore]` işaretli iki test ekle. Testler `HANGAR_EPIC_LIVE_DIR` ortam değişkenindeki klasörü okur; değişken yoksa erken döner.
-  - `live_library_parses`: tüm `live-library-*.json` dosyaları ayrışır. Son sayfa dışındakilerde imleç `Some` döner. Toplam kayıt sayısı sıfırdan büyüktür.
-  - `live_catalog_parses`: tüm `live-catalog-*.json` dosyaları ayrışır ve en az bir `is_game` kaydı vardır.
-- [ ] **Step 2:** Denetçi Windows'ta çalıştırır: `HANGAR_EPIC_LIVE_DIR="$APPDATA/com.hangar.app/e0" cargo test -p hangar-core live_ -- --ignored` → PASS.
-  - Başarısızsa ayrıştırma ya da filtre kuralları canlı şekle göre düzeltilir. Düzeltmeye karşılık gelen **sentetik** fixture'lar güncellenir; T4 testleri yeniden geçmelidir.
-  - Bu adım tamamlanmadan T5c'ye geçilmez.
-- [ ] **Step 3:** Commit: `test(core): epic canlı yanıt doğrulaması (yerel, ignore)`.
+- [ ] **Step 1:** Add two tests marked `#[ignore]`. The tests read the folder in the `HANGAR_EPIC_LIVE_DIR` environment variable; if the variable is absent they return early.
+  - `live_library_parses`: all `live-library-*.json` files parse. On all but the last page the cursor returns `Some`. The total record count is greater than zero.
+  - `live_catalog_parses`: all `live-catalog-*.json` files parse and there is at least one `is_game` entry.
+- [ ] **Step 2:** The reviewer runs on Windows: `HANGAR_EPIC_LIVE_DIR="$APPDATA/com.hangar.app/e0" cargo test -p hangar-core live_ -- --ignored` → PASS.
+  - If it fails, the parsing or filter rules are fixed to match the live shape. The corresponding **synthetic** fixtures are updated; the T4 tests must pass again.
+  - T5c is not started before this step is finished.
+- [ ] **Step 3:** Commit: `test(core): epic live response verification (local, ignored)`.
 
 ---
 
-### Task 5a: Belge deposu ve DPAPI
+### Task 5a: Credential store and DPAPI
 
 **Files:**
 - Create: `crates/hangar-core/src/accounts/store.rs` (`pub mod store;`)
@@ -453,17 +453,17 @@ fn fx(n: &str) -> String { std::fs::read_to_string(std::path::Path::new(env!("CA
 
 **Interfaces:**
 - `pub trait SecretStore: Send + Sync { fn load(&self, p: Platform) -> Result<Option<Vec<u8>>, AuthError>; fn save(&self, p: Platform, data: &[u8]) -> std::io::Result<()>; fn delete(&self, p: Platform) -> std::io::Result<()>; }`
-  - `load`, çözülemeyen bir dosya için `Err(AuthError::Corrupt)` döner.
-  - `delete`, dosya yoksa da `Ok` döner.
+  - `load` returns `Err(AuthError::Corrupt)` for a file that cannot be decrypted.
+  - `delete` returns `Ok` even if the file does not exist.
 - `#[derive(Default)] pub struct MemoryStore { inner: Mutex<HashMap<Platform, Vec<u8>>>, pub fail_save: AtomicBool, pub corrupt: AtomicBool, saves: AtomicUsize }`
   - `pub fn saves(&self) -> usize`, `pub fn raw(&self, p: Platform) -> Option<Vec<u8>>`.
-  - `fail_save` true ise `save` `Err` döner. `corrupt` true ise `load` `Err(Corrupt)` döner.
+  - If `fail_save` is true, `save` returns `Err`. If `corrupt` is true, `load` returns `Err(Corrupt)`.
 - `#[cfg(windows)] pub struct DpapiStore { dir: PathBuf }`, `pub fn new(dir: PathBuf) -> Self`.
-  - `CryptProtectData` / `CryptUnprotectData`, entropi `b"hangar-accounts-v1"`, `CRYPTPROTECT_UI_FORBIDDEN`, çıktı `LocalFree` ile serbest bırakılır.
-  - Dosya `<dir>/<p.as_str()>.dat`; yazarken önce `.dat.tmp`, sonra `std::fs::rename`. Klasör `create_dir_all` ile oluşturulur.
-- `pub fn save_cred(store: &dyn SecretStore, c: &StoredCred) -> std::io::Result<()>` ve `pub fn load_cred(store: &dyn SecretStore) -> Result<Option<StoredCred>, AuthError>`: Epic için, JSON. `v != 1` ya da JSON hatası → `Corrupt`.
+  - `CryptProtectData` / `CryptUnprotectData`, entropy `b"hangar-accounts-v1"`, `CRYPTPROTECT_UI_FORBIDDEN`, the output is released with `LocalFree`.
+  - File `<dir>/<p.as_str()>.dat`; when writing, first `.dat.tmp`, then `std::fs::rename`. The folder is created with `create_dir_all`.
+- `pub fn save_cred(store: &dyn SecretStore, c: &StoredCred) -> std::io::Result<()>` and `pub fn load_cred(store: &dyn SecretStore) -> Result<Option<StoredCred>, AuthError>`: for Epic, JSON. `v != 1` or a JSON error → `Corrupt`.
 
-- [ ] **Step 1: Testleri yaz.**
+- [ ] **Step 1: Write the tests.**
 
 ```rust
 #[test] fn memory_roundtrip_and_flags() {
@@ -496,38 +496,38 @@ fn fx(n: &str) -> String { std::fs::read_to_string(std::path::Path::new(env!("CA
 ```
 
 - [ ] **Step 2:** FAIL.
-- [ ] **Step 3:** Uygula.
-- [ ] **Step 4:** `cargo test -p hangar-core` → PASS (Windows'ta DPAPI testi dahil).
-- [ ] **Step 5:** Commit: `feat(core): belge deposu ve windows dpapi`.
+- [ ] **Step 3:** Implement.
+- [ ] **Step 4:** `cargo test -p hangar-core` → PASS (including the DPAPI test on Windows).
+- [ ] **Step 5:** Commit: `feat(core): credential store and windows dpapi`.
 
 ---
 
-### Task 5b: Önbellek tabloları
+### Task 5b: Cache tables
 
 **Files:** Modify `crates/hangar-core/src/db.rs`
 
-**Interfaces** (yeni tablolar `init` içindeki `execute_batch`'e eklenir):
+**Interfaces** (new tables are added to the `execute_batch` in `init`):
 - `epic_catalog(item_id TEXT PRIMARY KEY, title TEXT NOT NULL, is_game INTEGER NOT NULL)`
-  - `pub fn catalog_get(&self, ids: &[String]) -> Result<HashMap<String, CatalogInfo>>`: yalnızca bulunanları döner.
+  - `pub fn catalog_get(&self, ids: &[String]) -> Result<HashMap<String, CatalogInfo>>`: returns only those found.
   - `pub fn catalog_put(&self, items: &HashMap<String, CatalogInfo>) -> Result<()>`: `INSERT OR REPLACE`.
 - `owned_cache(platform TEXT PRIMARY KEY, json TEXT NOT NULL, fetched_at INTEGER NOT NULL)`
   - `pub fn owned_cache_get(&self, p: Platform) -> Result<Option<Vec<PlatformEntry>>>`
   - `pub fn owned_cache_put(&self, p: Platform, v: &[PlatformEntry], at: i64) -> Result<()>`
   - `pub fn owned_cache_delete(&self, p: Platform) -> Result<()>`
-- Hesap durumu için yeni tablo yok: `settings` anahtarı `account_state.epic`, değeri `"expired"`. Yardımcılar: `pub fn account_expired(&self, p: Platform) -> Result<bool>`, `pub fn set_account_expired(&self, p: Platform, on: bool) -> Result<()>` (false → satır silinir).
+- No new table for account state: the `settings` key `account_state.epic`, with value `"expired"`. Helpers: `pub fn account_expired(&self, p: Platform) -> Result<bool>`, `pub fn set_account_expired(&self, p: Platform, on: bool) -> Result<()>` (false → the row is deleted).
 
-- [ ] **Step 1: Testler:**
-  - `catalog_roundtrip`: iki kayıt `put` edilir, üç kimlikle `get` iki döner, değerler eşit.
-  - `owned_cache_roundtrip`: `put` → `get` eşit; `delete` → `None`.
-  - `account_expired_flag`: varsayılan false → true → false; false olunca `get_setting("account_state.epic")` `None` döner.
+- [ ] **Step 1: Tests:**
+  - `catalog_roundtrip`: two entries are `put`, `get` with three ids returns two, values equal.
+  - `owned_cache_roundtrip`: `put` → `get` equal; `delete` → `None`.
+  - `account_expired_flag`: default false → true → false; once false, `get_setting("account_state.epic")` returns `None`.
 - [ ] **Step 2:** FAIL.
-- [ ] **Step 3:** Uygula.
+- [ ] **Step 3:** Implement.
 - [ ] **Step 4:** PASS.
-- [ ] **Step 5:** Commit: `feat(core): epic katalog ve sahip olunanlar önbelleği`.
+- [ ] **Step 5:** Commit: `feat(core): epic catalog and owned-games cache`.
 
 ---
 
-### Task 5c: `EpicClient` akışı (denetçi inceleme kapısı)
+### Task 5c: `EpicClient` flow (reviewer gate)
 
 **Files:** Modify `crates/hangar-core/src/accounts/epic.rs`
 
@@ -536,45 +536,45 @@ fn fx(n: &str) -> String { std::fs::read_to_string(std::path::Path::new(env!("CA
 - `impl EpicClient`:
   - `pub fn new(api: Box<dyn EpicApi>, store: Box<dyn SecretStore>) -> Self`
   - `pub fn connect(&self, db: &Db, code: &str) -> Result<String, AuthError>`
-    - `lock` altında: `token([("grant_type","authorization_code"),("code",code),("token_type","eg1")])` → `parse_token` → `save_cred`.
-    - Kayıt hatası `Network("kayıt")` olarak döner.
-    - Ardından `set_account_expired(false)`, `generation += 1`; görünen adı döner.
-  - `fn refresh_locked(&self) -> Result<String, AuthError>` (çağıran `lock`'u tutar):
-    - `load_cred`: `None` → `NotConnected`; `Corrupt` → `store.delete` ve `Corrupt`.
+    - Under `lock`: `token([("grant_type","authorization_code"),("code",code),("token_type","eg1")])` → `parse_token` → `save_cred`.
+    - A save error is returned as `Network("kayıt")`.
+    - Then `set_account_expired(false)`, `generation += 1`; returns the display name.
+  - `fn refresh_locked(&self) -> Result<String, AuthError>` (the caller holds `lock`):
+    - `load_cred`: `None` → `NotConnected`; `Corrupt` → `store.delete` and `Corrupt`.
     - `token([("grant_type","refresh_token"),("refresh_token",&cred.refresh_token),("token_type","eg1")])` → `parse_token`.
-    - Yeni belge **access token döndürülmeden önce** `save_cred` ile kaydedilir. Kayıt başarısız olursa eski dosyaya dokunulmaz ve `Network("kayıt")` döner.
-    - Access token döner.
-  - `pub fn access_token(&self) -> Result<String, AuthError>`: `lock` alır ve `refresh_locked` çağırır.
+    - The new credential is saved with `save_cred` **before the access token is returned**. If the save fails the old file is not touched and `Network("kayıt")` is returned.
+    - Returns the access token.
+  - `pub fn access_token(&self) -> Result<String, AuthError>`: takes `lock` and calls `refresh_locked`.
   - `pub fn fetch_owned(&self, db: &Db) -> Result<Vec<PlatformEntry>, AuthError>`
-    - `access_token` alınır, tüm kütüphane sayfaları okunur.
-    - `catalog_get` ile önbellekte olmayan kimlikler namespace başına toplu istenir; çağrılar arasında `sleep(100ms)`.
-    - `catalog_put`, ardından `owned_entries`.
+    - `access_token` is obtained, all library pages are read.
+    - Ids not in the cache per `catalog_get` are requested in bulk per namespace; `sleep(100ms)` between calls.
+    - `catalog_put`, then `owned_entries`.
   - `pub fn owned_for_scan(&self, db: &Db) -> (Option<Result<Vec<PlatformEntry>, ProviderError>>, Vec<String>)`
-    - Başlangıçta `generation` okunur, sonra `fetch_owned`.
-    - Sonuç **`lock` altında** ele alınır; `generation` değiştiyse sonuç atılır ve `(None, [])` döner. Değişmediyse:
+    - `generation` is read at the start, then `fetch_owned`.
+    - The result is handled **under `lock`**; if `generation` changed the result is discarded and `(None, [])` is returned. If it did not change:
       - `NotConnected` → `(None, [])`
-      - `Ok(v)` → `owned_cache_put` ve `set_account_expired(false)`; `(Some(Ok(v)), [])`
-      - `Network(_)`/`Parse(_)` → önbellek varsa `Some(Ok(cache))`, yoksa `None`; uyarı `"Epic oyunları güncellenemedi; son bilinen liste gösteriliyor."`
-      - `InvalidGrant` → `set_account_expired(true)`; önbellek varsa onu kullanır; uyarı `"Epic bağlantısının süresi doldu: Ayarlar › Hesaplar'dan yeniden bağlan."`
+      - `Ok(v)` → `owned_cache_put` and `set_account_expired(false)`; `(Some(Ok(v)), [])`
+      - `Network(_)`/`Parse(_)` → `Some(Ok(cache))` if there is a cache, otherwise `None`; warning `"Epic oyunları güncellenemedi; son bilinen liste gösteriliyor."`
+      - `InvalidGrant` → `set_account_expired(true)`; uses the cache if there is one; warning `"Epic bağlantısının süresi doldu: Ayarlar › Hesaplar'dan yeniden bağlan."`
       - `Corrupt` → `(None, ["Epic bağlantısı okunamadı; yeniden bağlan."])`
   - `pub fn disconnect(&self, db: &Db) -> bool`
-    - `lock` altında: `generation += 1`, ardından `refresh_locked` → `api.kill`; sonuç `revoked` olarak tutulur.
-    - Her durumda `store.delete`, `owned_cache_delete` ve `set_account_expired(false)` çalışır.
-    - `revoked` döner.
-  - `pub fn status(&self, db: &Db) -> AccountStatus`: ağa çıkmaz.
-    - `load_cred` `Ok(Some(c))` ise `Connected` ya da `Expired` (bayrağa göre) ve `display_name: Some(c.display_name)`.
-    - Diğer durumlarda `Disconnected`.
+    - Under `lock`: `generation += 1`, then `refresh_locked` → `api.kill`; the result is kept as `revoked`.
+    - In every case `store.delete`, `owned_cache_delete` and `set_account_expired(false)` run.
+    - Returns `revoked`.
+  - `pub fn status(&self, db: &Db) -> AccountStatus`: does not go to the network.
+    - If `load_cred` is `Ok(Some(c))`, `Connected` or `Expired` (depending on the flag) and `display_name: Some(c.display_name)`.
+    - Otherwise `Disconnected`.
 - `#[derive(Serialize, Debug, PartialEq)] #[serde(rename_all = "lowercase")] pub enum AccountState { Disconnected, Connected, Expired }`
 - `#[derive(Serialize, Debug, PartialEq)] pub struct AccountStatus { pub platform: Platform, pub state: AccountState, pub display_name: Option<String> }`
 
-**Test sahtesi** (`#[cfg(test)] struct FakeApi`, aynı dosyada):
-- Alanlar: `tokens: Mutex<VecDeque<Result<String, AuthError>>>` (sırayla dönen token gövdeleri), `library: Vec<String>` (sayfa gövdeleri; imleç `"CUR<n>"` ise n'inci sayfa döner), `catalog: Result<String, AuthError>`, `kill: Result<(), AuthError>`.
-- Sayaçlar: `token_calls: AtomicUsize`, `catalog_calls: AtomicUsize`, `seen_refresh: Mutex<Vec<String>>` (token formundaki `refresh_token` değerleri).
-- İsteğe bağlı kanca: `on_library: Option<Box<dyn Fn() + Send + Sync>>` (kütüphane çağrısı sırasında çalışır; yarış testleri için).
-- `fn tok(at: &str, rt: &str) -> String` yardımcısı geçerli bir token gövdesi üretir (`displayName: "oyuncu"`, `account_id: "acc"`).
-- `EpicClient` testlerde `Arc<MemoryStore>`'u paylaşabilsin diye `SecretStore`, `Arc<T>` için de uygulanır (`impl<T: SecretStore> SecretStore for Arc<T>`).
+**Test double** (`#[cfg(test)] struct FakeApi`, in the same file):
+- Fields: `tokens: Mutex<VecDeque<Result<String, AuthError>>>` (token bodies returned in order), `library: Vec<String>` (page bodies; if the cursor is `"CUR<n>"` the n-th page is returned), `catalog: Result<String, AuthError>`, `kill: Result<(), AuthError>`.
+- Counters: `token_calls: AtomicUsize`, `catalog_calls: AtomicUsize`, `seen_refresh: Mutex<Vec<String>>` (the `refresh_token` values in the token form).
+- Optional hook: `on_library: Option<Box<dyn Fn() + Send + Sync>>` (runs during the library call; for race tests).
+- The helper `fn tok(at: &str, rt: &str) -> String` produces a valid token body (`displayName: "oyuncu"`, `account_id: "acc"`).
+- So that `EpicClient` can share an `Arc<MemoryStore>` in tests, `SecretStore` is also implemented for `Arc<T>` (`impl<T: SecretStore> SecretStore for Arc<T>`).
 
-- [ ] **Step 1: Testleri yaz** (gövdeleri bu açıklamalara göre; assert'ler aynen):
+- [ ] **Step 1: Write the tests** (bodies according to these descriptions; asserts verbatim):
 
 ```rust
 #[test] fn connect_saves_and_returns_name() { /* tokens=[Ok(tok("AT1","RT1"))]; connect(db,"CODE") == Ok("oyuncu"); load_cred(store).refresh_token == "RT1"; status == Connected, display_name Some("oyuncu") */ }
@@ -590,25 +590,25 @@ fn fx(n: &str) -> String { std::fs::read_to_string(std::path::Path::new(env!("CA
 #[test] fn no_secret_leaks() { /* all bodies use "AT-SECRET"/"RT-SECRET"; run connect, fetch_owned, an InvalidGrant scan and a Network scan; join all warnings + every AuthError Display + all rows of owned_cache/settings/epic_catalog (SELECT * as text); assert none contains "AT-SECRET" or "RT-SECRET" */ }
 ```
 
-`disconnect_wins_over_inflight_scan` için `Db`, `std::env::temp_dir()` altında bir dosyada açılır (iki bağlantı aynı dosyayı kullanır). Kanca, `disconnect`'i `lock` boştayken çağırır; `fetch_owned` kütüphane çağrısı sırasında `lock`'u tutmaz.
+For `disconnect_wins_over_inflight_scan`, the `Db` is opened on a file under `std::env::temp_dir()` (two connections use the same file). The hook calls `disconnect` while `lock` is free; `fetch_owned` does not hold `lock` during the library call.
 
 - [ ] **Step 2:** FAIL.
-- [ ] **Step 3:** Uygula.
-- [ ] **Step 4:** `cargo test -p hangar-core` → PASS (testleri arka arkaya 3 kez çalıştır; titreme olmamalı).
-- [ ] **Step 5:** Commit: `feat(core): epic hesap akışı (bağlan, yenile, tara, kes)`.
-- [ ] **Step 6: Denetçi inceleme kapısı.** Denetçi bu görevin diff'ini şu gözle okur:
-  - Her hata yolunda belge sızıntısı var mı?
-  - Kilit sırası doğru mu?
-  - Kayıt hatasında eski belge korunuyor mu?
-  Sorun varsa T6'ya geçilmez.
+- [ ] **Step 3:** Implement.
+- [ ] **Step 4:** `cargo test -p hangar-core` → PASS (run the tests 3 times in a row; there must be no flakiness).
+- [ ] **Step 5:** Commit: `feat(core): epic account flow (connect, refresh, scan, disconnect)`.
+- [ ] **Step 6: Reviewer gate.** The reviewer reads this task's diff with these questions:
+  - Is there a credential leak on any error path?
+  - Is the lock order correct?
+  - Is the old credential preserved on a save error?
+  If there is a problem, T6 is not started.
 
 ---
 
-### Task 6: Tauri komutları ve taramaya bağlama
+### Task 6: Tauri commands and scan wiring
 
 **Files:**
 - Create: `src-tauri/src/accounts.rs`
-- Modify: `src-tauri/src/commands.rs` (`scan`, `launch`), `src-tauri/src/main.rs`, `src-tauri/capabilities/default.json` (`"dialog:allow-ask"` ekle)
+- Modify: `src-tauri/src/commands.rs` (`scan`, `launch`), `src-tauri/src/main.rs`, `src-tauri/capabilities/default.json` (add `"dialog:allow-ask"`)
 
 **Interfaces:**
 - Consumes: T3b `login::login`/`LoginError`; T5c `EpicClient`, `AccountStatus`; T5a `DpapiStore`; T3a `open_error`.
@@ -616,32 +616,32 @@ fn fx(n: &str) -> String { std::fs::read_to_string(std::path::Path::new(env!("CA
   - `#[cfg(windows)] let store: Box<dyn SecretStore> = Box::new(DpapiStore::new(dir.join("accounts")));`
   - `#[cfg(not(windows))] let store: Box<dyn SecretStore> = Box::new(MemoryStore::default());`
   - `app.manage(EpicClient::new(Box::new(HttpEpicApi), store));`
-- **Komutlar (`accounts.rs`):**
+- **Commands (`accounts.rs`):**
   - `get_accounts(app) -> Result<Vec<AccountStatus>, String>`: `vec![client.status(&db)]`.
   - `connect_account(app, platform: Platform) -> Result<AccountStatus, String>`
     - `platform != Epic` → `Err("Desteklenmiyor")`.
-    - `login` hataları: `Cancelled` → `Err("cancelled")`, `Timeout` → `Err("Giriş zaman aşımına uğradı")`, `AlreadyOpen` → `Err("Giriş penceresi zaten açık")`, `Window(e)` → `Err(format!("Giriş penceresi açılamadı: {e}"))`.
-    - Ardından `spawn_blocking` içinde kendi `Db::open(DbPath)` bağlantısıyla `client.connect`; dönüşte `status`.
-  - `disconnect_account(app, platform) -> Result<bool, String>`: `spawn_blocking` içinde kendi `Db` bağlantısıyla `client.disconnect`.
-  - `EpicClient`'a `app.state::<EpicClient>()` ile erişilir; `State` `'static` olmadığından `spawn_blocking` içinde `app.clone().state::<EpicClient>()` kullan.
+    - `login` errors: `Cancelled` → `Err("cancelled")`, `Timeout` → `Err("Giriş zaman aşımına uğradı")`, `AlreadyOpen` → `Err("Giriş penceresi zaten açık")`, `Window(e)` → `Err(format!("Giriş penceresi açılamadı: {e}"))`.
+    - Then `client.connect` inside `spawn_blocking` with its own `Db::open(DbPath)` connection; `status` on return.
+  - `disconnect_account(app, platform) -> Result<bool, String>`: `client.disconnect` inside `spawn_blocking` with its own `Db` connection.
+  - `EpicClient` is accessed with `app.state::<EpicClient>()`; since `State` is not `'static`, use `app.clone().state::<EpicClient>()` inside `spawn_blocking`.
 - **`commands.rs::scan`:**
-  - Mevcut durumda paylaşılan `Mutex<Db>` kısa süreli kilitlenip ayarlar okunuyor, ağ çağrısı kilit dışında yapılıyor.
-  - Aynı desenle, Steam `fetch_owned`'ın hemen ardından ve paylaşılan kilit **alınmadan önce** şu çalışır: `let epic_db = Db::open(&app.state::<DbPath>().0).map_err(dberr)?; let (epic, epic_warn) = app.state::<EpicClient>().owned_for_scan(&epic_db);`
-  - `epic` `Some(r)` ise `owned.push((Platform::Epic, r))`; `extra.extend(epic_warn)`.
-- **`commands.rs::launch`:** URI açma hatası `.map_err(|e| open_error(&u, &e.to_string()))` ile döner.
-- `main.rs` `generate_handler!` listesine `accounts::get_accounts`, `accounts::connect_account` ve `accounts::disconnect_account` eklenir (her iki cfg dalında).
+  - Currently the shared `Mutex<Db>` is locked briefly to read settings, and the network call is made outside the lock.
+  - With the same pattern, right after the Steam `fetch_owned` and **before the shared lock is taken**, this runs: `let epic_db = Db::open(&app.state::<DbPath>().0).map_err(dberr)?; let (epic, epic_warn) = app.state::<EpicClient>().owned_for_scan(&epic_db);`
+  - If `epic` is `Some(r)`, `owned.push((Platform::Epic, r))`; `extra.extend(epic_warn)`.
+- **`commands.rs::launch`:** a URI open error returns via `.map_err(|e| open_error(&u, &e.to_string()))`.
+- `accounts::get_accounts`, `accounts::connect_account` and `accounts::disconnect_account` are added to the `main.rs` `generate_handler!` list (in both cfg branches).
 
-- [ ] **Step 1:** Uygula. Mantık core'da test edildiği için src-tauri'de test yok.
-- [ ] **Step 2:** `cargo check -p hangar` ve `cargo test -p hangar-core` → PASS.
-- [ ] **Step 3:** Sızıntı kontrolü, ardından commit: `feat(app): epic hesap komutları ve taramaya bağlama`.
+- [ ] **Step 1:** Implement. No tests in src-tauri since the logic is tested in core.
+- [ ] **Step 2:** `cargo check -p hangar` and `cargo test -p hangar-core` → PASS.
+- [ ] **Step 3:** Leak check, then commit: `feat(app): epic account commands and scan wiring`.
 
 ---
 
-### Task 7: Ayarlar › Hesaplar arayüzü ve yükleniyor satırı
+### Task 7: Settings › Accounts UI and loading line
 
 **Files:**
 - Create: `src/components/AccountsSection.tsx`, `src/components/AccountsSection.test.tsx`
-- Modify: `src/lib/api.ts`, `src/components/SettingsDialog.tsx`, `src/components/SettingsDialog.test.tsx` (mock'a `getAccounts`), `src/state/useLibrary.ts`, `src/App.tsx`
+- Modify: `src/lib/api.ts`, `src/components/SettingsDialog.tsx`, `src/components/SettingsDialog.test.tsx` (`getAccounts` in the mock), `src/state/useLibrary.ts`, `src/App.tsx`
 
 **Interfaces:**
 - **`api.ts`:**
@@ -650,68 +650,68 @@ fn fx(n: &str) -> String { std::fs::read_to_string(std::path::Path::new(env!("CA
   - `connectAccount: (platform: Platform) => invoke<AccountStatus>("connect_account", { platform })`
   - `disconnectAccount: (platform: Platform) => invoke<boolean>("disconnect_account", { platform })`
 - **`AccountsSection`** (`{ onChanged: (label?: string) => Promise<void> }`):
-  - Açılışta `getAccounts` çağrılır; yalnızca `platform === "epic"` satırı gösterilir.
-  - Satır başlığı "Epic Games".
-  - **Durum metni:** "Bağlı değil" / `"Bağlı · " + display_name` / "Süresi doldu".
-  - **Düğme:** "Bağlan" / "Bağlantıyı kes" / "Yeniden bağlan". Beklerken metin "Epic penceresi açık…" olur ve düğme devre dışı kalır.
-  - Altta iki sabit `<small>` satırı: "Giriş Epic'in kendi sayfasında yapılır; Hangar şifreni görmez." ve "Bağlantı belgesi yalnızca bu bilgisayarda, şifreli tutulur."
-  - **Bağlan:**
-    - Başarılı → durum güncellenir ve `onChanged("Epic oyunları yükleniyor…")` çağrılır.
-    - Hata `"cancelled"` → hiçbir şey gösterilmez.
-    - Diğer hatalar → `role="alert"` ile metin gösterilir.
-  - **Kes:**
+  - On open `getAccounts` is called; only the `platform === "epic"` row is shown.
+  - Row heading "Epic Games".
+  - **Status text:** "Bağlı değil" / `"Bağlı · " + display_name` / "Süresi doldu".
+  - **Button:** "Bağlan" / "Bağlantıyı kes" / "Yeniden bağlan". While waiting the text becomes "Epic penceresi açık…" and the button is disabled.
+  - Two fixed `<small>` lines at the bottom: "Giriş Epic'in kendi sayfasında yapılır; Hangar şifreni görmez." and "Bağlantı belgesi yalnızca bu bilgisayarda, şifreli tutulur."
+  - **Connect:**
+    - Success → the status is updated and `onChanged("Epic oyunları yükleniyor…")` is called.
+    - Error `"cancelled"` → nothing is shown.
+    - Other errors → the text is shown with `role="alert"`.
+  - **Disconnect:**
     - `ask("Epic bağlantısı silinecek ve Epic'teki oturum kapatılacak; kurulu oyunlar kalır.", { title: "Bağlantıyı kes", kind: "warning" })` (`@tauri-apps/plugin-dialog`).
-    - `true` ise `disconnectAccount`. Sonuç `false` olursa `role="status"` ile "Epic'teki oturum kapatılamadı; Epic hesap ayarlarından kapatabilirsin." gösterilir.
-    - Ardından durum yenilenir ve `onChanged()` çağrılır.
+    - If `true`, `disconnectAccount`. If the result is `false`, "Epic'teki oturum kapatılamadı; Epic hesap ayarlarından kapatabilirsin." is shown with `role="status"`.
+    - Then the status is refreshed and `onChanged()` is called.
 - **`SettingsDialog`:**
-  - Yeni prop: `onAccountsChanged?: (label?: string) => Promise<void>`.
-  - `<AccountsSection onChanged={onAccountsChanged ?? (async () => {})} />` "Oyun klasörleri" bölümünün altına eklenir.
+  - New prop: `onAccountsChanged?: (label?: string) => Promise<void>`.
+  - `<AccountsSection onChanged={onAccountsChanged ?? (async () => {})} />` is added below the "Oyun klasörleri" section.
 - **`useLibrary`:**
-  - `rescan` aynen kalır.
-  - Yeni: `const [scanLabel, setScanLabel] = useState<string | null>(null)` ve `rescanLabeled = useCallback(async (label: string) => { setScanLabel(label); try { await rescan(); } finally { if (mounted.current) setScanLabel(null); } }, [rescan])`.
-  - İkisi de döndürülür.
+  - `rescan` stays as is.
+  - New: `const [scanLabel, setScanLabel] = useState<string | null>(null)` and `rescanLabeled = useCallback(async (label: string) => { setScanLabel(label); try { await rescan(); } finally { if (mounted.current) setScanLabel(null); } }, [rescan])`.
+  - Both are returned.
 - **`App.tsx`:**
   - `{rescanning && <span className="scan" role="status">{scanLabel ?? "Taranıyor…"}</span>}`
   - `<SettingsDialog … onAccountsChanged={(l) => (l ? rescanLabeled(l) : rescan())} />`
 
-- [ ] **Step 1: `AccountsSection.test.tsx`.** `vi.mock("../lib/api")` ve `vi.mock("@tauri-apps/plugin-dialog", () => ({ ask: vi.fn() }))` ile yazılır:
-  - `connects and triggers labeled rescan`: disconnected → "Bağlan" tıklanır → `connectAccount("epic")` çağrılır ve `onChanged("Epic oyunları yükleniyor…")` çağrılır; sonra "Bağlı · oyuncu" görünür.
-  - `cancel is silent`: `connectAccount` `"cancelled"` ile reddedilir → `queryByRole("alert")` null döner ve `onChanged` çağrılmaz.
-  - `other error shows alert`: `"Giriş zaman aşımına uğradı"` → alert bu metni içerir.
-  - `disconnect asks first`: `ask` → false ise `disconnectAccount` çağrılmaz. `ask` → true ve `disconnectAccount` → true ise `onChanged()` argümansız çağrılır.
-  - `server revoke failure is shown`: `disconnectAccount` → false ise status "Epic'teki oturum kapatılamadı; Epic hesap ayarlarından kapatabilirsin." metnini gösterir.
-  - `expired shows reconnect`: state expired → "Yeniden bağlan" düğmesi ve "Süresi doldu" metni.
+- [ ] **Step 1: `AccountsSection.test.tsx`.** Written with `vi.mock("../lib/api")` and `vi.mock("@tauri-apps/plugin-dialog", () => ({ ask: vi.fn() }))`:
+  - `connects and triggers labeled rescan`: disconnected → "Bağlan" is clicked → `connectAccount("epic")` is called and `onChanged("Epic oyunları yükleniyor…")` is called; then "Bağlı · oyuncu" appears.
+  - `cancel is silent`: `connectAccount` rejects with `"cancelled"` → `queryByRole("alert")` returns null and `onChanged` is not called.
+  - `other error shows alert`: `"Giriş zaman aşımına uğradı"` → the alert contains this text.
+  - `disconnect asks first`: if `ask` → false, `disconnectAccount` is not called. If `ask` → true and `disconnectAccount` → true, `onChanged()` is called with no argument.
+  - `server revoke failure is shown`: if `disconnectAccount` → false, status shows the text "Epic'teki oturum kapatılamadı; Epic hesap ayarlarından kapatabilirsin.".
+  - `expired shows reconnect`: state expired → the "Yeniden bağlan" button and the text "Süresi doldu".
 - [ ] **Step 2:** `npm test` → FAIL.
-- [ ] **Step 3:** Uygula; mevcut `fld`, `row`, `ghost` sınıflarını kullan, yeni CSS yok.
-- [ ] **Step 4:** `npm test` ve `npx tsc --noEmit` → PASS.
-- [ ] **Step 5:** Commit: `feat(ui): ayarlarda hesaplar bölümü`.
+- [ ] **Step 3:** Implement; use the existing `fld`, `row`, `ghost` classes, no new CSS.
+- [ ] **Step 4:** `npm test` and `npx tsc --noEmit` → PASS.
+- [ ] **Step 5:** Commit: `feat(ui): accounts section in settings`.
 
 ---
 
-### Task 8: README, elle doğrulama, release duman testi
+### Task 8: README, manual verification, release smoke test
 
-**Files:** Modify `README.md`. `CLAUDE.md`'yi denetçi günceller, alt ajan güncellemez.
+**Files:** Modify `README.md`. The reviewer updates `CLAUDE.md`; a subagent does not.
 
 - [ ] **Step 1: README.**
-  - "Veri konumu" bölümüne `accounts\` klasörü eklenir.
-  - Yeni bir "Hesap bağlantıları (Epic)" bölümü yazılır. Ubisoft anılmaz. İçeriği:
-    - **Ne saklanıyor:** yalnızca yenileme belgesi ve görünen ad, `%APPDATA%\com.hangar.app\accounts\epic.dat` dosyasında. Windows DPAPI ile şifreli; yalnızca bu Windows kullanıcısı çözebilir.
-    - **Nasıl silinir:** "Bağlantıyı kes" hem dosyayı siler hem Epic'teki oturumu kapatır. Dosya elle de silinebilir.
-    - **Epic'te görünüşü:** Hangar, Epic Games Launcher'ın herkese açık istemci kimliğini kullanır. Bu yüzden Epic hesap sayfasında bağlantı "Epic Games Launcher" olarak görünür.
-    - **Resmi olmayan servis:** Epic bu yolu engelleyebilir; o zaman yalnızca kurulu Epic oyunları görünür.
-    - **Kullanım koşulları:** bu yol Epic'in kullanım koşullarına aykırı sayılabilir. En kötü durumda hesap işaretlenebilir. Legendary, Heroic ve Playnite aynı yolu kullanıyor, ama bu bir garanti değil.
-    - **Belgenin kapsamı:** belge hesabın tamamına erişir. DPAPI, aynı kullanıcıyla çalışan zararlı yazılıma karşı koruma sağlamaz.
-    - **Sunucu yok:** Hangar'ın sunucusu yok; veri yalnızca Epic'e gider.
-    - **Kalıcı belge istemiyorsan:** işin bitince bağlantıyı kes.
-- [ ] **Step 2:** Tüm testler PASS: `cargo test -p hangar-core`, `cargo check -p hangar`, `npm test`, `npx tsc --noEmit`.
-- [ ] **Step 3:** Release duman testi: `npm run tauri build` başarılı ve `grep -c debug_epic_probe target/release/hangar.exe` → `0`.
-- [ ] **Step 4: Elle kontrol (kullanıcıyla, `npm run tauri dev`):**
-  1. Ayarlar › Hesaplar › "Bağlan": pencere başlığı "Epic Games girişi — www.epicgames.com" gösteriyor; giriş sonrası pencere kendiliğinden kapanıyor; durum "Bağlı · <ad>".
-  2. Üstte "Epic oyunları yükleniyor…" görünüyor, ardından kurulu olmayan Epic oyunları "Kur" kartlarıyla geliyor.
-  3. Death's Door hâlâ tek kart ve "Oyna" çalışıyor.
-  4. Uygulama kapatılıp açılınca giriş istenmiyor, durum "Bağlı".
-  5. Kurulu olmayan bir Epic oyununda "Kur" Epic launcher'da o oyunun sayfasını ya da kurulumunu açıyor.
-  6. Wi-Fi kapalıyken "Yeniden tara" son bilinen listeyi ve "Epic oyunları güncellenemedi; son bilinen liste gösteriliyor." uyarısını gösteriyor.
-  7. "Bağlantıyı kes" onay soruyor, sonra yalnızca kurulu Epic oyunları kalıyor. `%APPDATA%\com.hangar.app\accounts\epic.dat` yok; epicgames.com hesap sayfasında oturum kapanmış.
-  8. `EBWebView` klasörü var ve içinde `epicgames` çerezi yok (E0'daki komutla).
-- [ ] **Step 5:** Commit: `docs: epic hesap bağlantısı için güvenlik notu`.
+  - The `accounts\` folder is added to the "Veri konumu" section.
+  - A new "Hesap bağlantıları (Epic)" section is written. Ubisoft is not mentioned. Its content:
+    - **What is stored:** only the refresh credential and the display name, in the file `%APPDATA%\com.hangar.app\accounts\epic.dat`. Encrypted with Windows DPAPI; only this Windows user can decrypt it.
+    - **How to delete it:** "Bağlantıyı kes" both deletes the file and closes the session on Epic. The file can also be deleted by hand.
+    - **How it appears on Epic:** Hangar uses the Epic Games Launcher's public client id. So on the Epic account page the connection appears as "Epic Games Launcher".
+    - **Unofficial service:** Epic may block this route; then only installed Epic games are shown.
+    - **Terms of use:** this route may be considered a violation of Epic's terms of use. In the worst case the account may be flagged. Legendary, Heroic and Playnite use the same route, but that is not a guarantee.
+    - **Scope of the credential:** the credential has access to the whole account. DPAPI does not protect against malware running as the same user.
+    - **No server:** Hangar has no server; data goes only to Epic.
+    - **If you do not want a persistent credential:** disconnect when you are done.
+- [ ] **Step 2:** All tests PASS: `cargo test -p hangar-core`, `cargo check -p hangar`, `npm test`, `npx tsc --noEmit`.
+- [ ] **Step 3:** Release smoke test: `npm run tauri build` succeeds and `grep -c debug_epic_probe target/release/hangar.exe` → `0`.
+- [ ] **Step 4: Manual check (with the user, `npm run tauri dev`):**
+  1. Settings › Accounts › "Bağlan": the window title shows "Epic Games girişi — www.epicgames.com"; after login the window closes on its own; status "Bağlı · <name>".
+  2. "Epic oyunları yükleniyor…" appears at the top, then uninstalled Epic games arrive with "Kur" cards.
+  3. Death's Door is still a single card and "Oyna" works.
+  4. After closing and reopening the app, no login is requested, status "Bağlı".
+  5. On an uninstalled Epic game, "Kur" opens that game's page or its installation in the Epic launcher.
+  6. With Wi-Fi off, "Yeniden tara" shows the last known list and the warning "Epic oyunları güncellenemedi; son bilinen liste gösteriliyor.".
+  7. "Bağlantıyı kes" asks for confirmation, then only installed Epic games remain. `%APPDATA%\com.hangar.app\accounts\epic.dat` is gone; the session is signed out on the epicgames.com account page.
+  8. The `EBWebView` folder exists and contains no `epicgames` cookie (with the command from E0).
+- [ ] **Step 5:** Commit: `docs: security note for the epic account connection`.

@@ -2,8 +2,8 @@ use super::AuthError;
 use std::time::Duration;
 
 pub const CLIENT_ID: &str = "46899977096215655";
-// Galaxy istemcisinin herkese açık gizli anahtarı (Heroic/Playnite/lgogdownloader aynısını kullanır).
-// GOG belirteç ucu bunu sorgu dizesinde ister.
+// The Galaxy client's public secret (Heroic/Playnite/lgogdownloader use the same one).
+// The GOG token endpoint expects it in the query string.
 const CLIENT_SECRET: &str = "9d85c43b1482497dbbce61f6e4aa173a433796eeae2ca8c5f6129f2dc4de46d9";
 pub const REDIRECT: &str = "https://embed.gog.com/on_login_success?origin=client";
 const TOKEN_URL: &str = "https://auth.gog.com/token";

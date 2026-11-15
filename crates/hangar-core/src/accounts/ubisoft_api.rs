@@ -17,7 +17,7 @@ pub struct UbiLogin {
     pub remember_ticket: String,
     pub user_id: String,
     pub display_name: String,
-    /// Temizleme için tüm gizli/kişisel dizgeler (boşlar elenir).
+    /// All secret/personal strings for scrubbing (empty ones are dropped).
     pub secrets: Vec<String>,
 }
 

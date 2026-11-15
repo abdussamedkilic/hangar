@@ -1,123 +1,123 @@
-# Hangar — Birleşik Oyun Kütüphanesi · Tasarım
+# Hangar — Unified Game Library · Design
 
-Tarih: 2026-11-09 · Durum: onay bekliyor
-(Çalışma adı "Hangar" benim seçimim; istediğin zaman değişir.)
+Date: 2026-11-09 · Status: awaiting approval
+(The working name "Hangar" is my pick; it can change any time.)
 
-## Niyet ve neden
+## Intent and rationale
 
-Kullanıcı oyunlarını Steam ve Epic Games'te oynuyor; ileride Ubisoft Connect ve EA app hesapları da bağlanabilir. İstediği, tüm oyunlarını **tek bir yerde** görmek ve oradan başlatmak. Playnite bu işi yapıyor ama kullanıcı **kendi projesini**, arayüzü kendi tasarladığı ve istediği gibi geliştirebileceği bir uygulamayı istiyor. GOG Galaxy'nin arayüzünü sevmiyor, Galaxy entegrasyonu istemiyor. Playnite ilham kaynağı, fork değil. Gerekçe: açık kodu C#/WPF ile yazılmış eski bir sürüm (v10), v11 ise kapalı repoda sıfırdan yazılıyor ve WPF, istenen web animasyon kütüphanelerini çalıştıramaz.
+The user plays on Steam and Epic Games; Ubisoft Connect and EA app accounts may be linked later. What they want is to see all their games **in one place** and launch them from there. Playnite does this, but the user wants **their own project**: an app whose UI they design themselves and can develop as they like. They dislike GOG Galaxy's UI and do not want Galaxy integration. Playnite is an inspiration, not a fork. Reason: its open-source code is an old version (v10) written in C#/WPF, while v11 is being rewritten from scratch in a closed repo, and WPF cannot run the web animation libraries the user wants.
 
-Başarı ölçütü: uygulamayı açınca Steam ve Epic oyunlarının hepsi, kapak görselleriyle, tek bir akıcı ve "AI yapımı gibi görünmeyen" arayüzde listeleniyor. Tek tıkla başlatılabiliyor.
+Success criterion: when the app opens, all Steam and Epic games are listed with cover art in a single fluid UI that does not look "AI-made". They can be launched with one click.
 
-## Hedefler (sürüm 1)
+## Goals (version 1)
 
-1. **Steam:** kurulu oyunlar (yerel dosyalardan) ve sahip olunan ama kurulu olmayan oyunlar (Steam Web API ile, kullanıcının kendi API anahtarı ve SteamID'siyle).
-2. **Epic:** kurulu oyunlar (yerel manifest dosyalarından).
-3. **Ubisoft Connect:** kurulu oyunlar (registry'den). Kurulu oyun yoksa sessizce boş döner.
-4. **Birleştirme:** aynı oyun birden fazla platformdaysa tek kart olarak gösterilir. "Başlat" varsayılan olarak Steam'den açar; kartın yanındaki seçiciyle başka platform seçilebilir. Oyun başına seçilen platform hatırlanır.
-5. **Başlatma, kurma ve güncelleme işlerini platformların kendi launcher'ları yapar.** Bunun için platformun kendi linki açılır: `steam://rungameid/<id>`, `steam://install/<id>`, Epic ve Ubisoft için de onların link biçimleri. Hangar kendi indirme motoruna sahip değil.
-6. **Kütüphane ekranı:** kapak ızgarası, arama, filtreler (platform, kurulu/kurulu değil), sıralama (ad, son oynanan). Oyun detay paneli: kapak, platformlar, kurulu boyut, son oynama ve oynama süresi (Steam'de varsa).
-7. **Arayüz:** akıcı, karakterli, koyu tema öncelikli. Animasyonlar GSAP ve Lenis ile, react-bits bileşenleri yerinde kullanılır. Tasarım yönü birlikte belirlenecek (Dribbble referansları, taste/unslop/ui-ux-pro-max skill'leri).
+1. **Steam:** installed games (from local files) and owned-but-not-installed games (via the Steam Web API, with the user's own API key and SteamID).
+2. **Epic:** installed games (from local manifest files).
+3. **Ubisoft Connect:** installed games (from the registry). If none are installed, it silently returns empty.
+4. **Merging:** if the same game exists on multiple platforms, it is shown as a single card. "Başlat" (Launch) opens from Steam by default; another platform can be chosen with the selector next to the card. The chosen platform is remembered per game.
+5. **Launching, installing and updating are done by the platforms' own launchers.** For this, the platform's own link is opened: `steam://rungameid/<id>`, `steam://install/<id>`, and their link formats for Epic and Ubisoft. Hangar has no download engine of its own.
+6. **Library screen:** cover grid, search, filters (platform, installed/not installed), sorting (name, last played). Game detail panel: cover, platforms, installed size, last played and playtime (where Steam has it).
+7. **UI:** fluid, characterful, dark theme first. Animations with GSAP and Lenis, react-bits components used where fitting. The design direction will be decided together (Dribbble references, taste/unslop/ui-ux-pro-max skills).
 
-## Hedef dışı (sürüm 1)
+## Non-goals (version 1)
 
-- GOG. Sağlayıcı mimarisi sonradan kendi GOG girişiyle eklemeye izin verecek.
-- EA app. Yerel veri biçimi belirsiz; sağlayıcı olarak sonra eklenecek.
-- Epic'in sahip olunan ama kurulu olmayan oyunları. Epic hesabına giriş (OAuth) gerektirir, sonraki sürüme kalır.
-- Kendi indirme ve güncelleme motoru, mod yönetimi, başarımlar, arkadaş listesi.
-- Linux ve macOS. Sadece Windows hedefleniyor.
+- GOG. The provider architecture will allow adding it later with its own GOG sign-in.
+- EA app. The local data format is unclear; it will be added later as a provider.
+- Epic's owned-but-not-installed games. That requires Epic account sign-in (OAuth) and is left for a later version.
+- Own download and update engine, mod management, achievements, friends list.
+- Linux and macOS. Only Windows is targeted.
 
-## Anti-hedefler (çalışsa bile başarısızlık sayılacaklar)
+## Anti-goals (count as failure even if it works)
 
-- Arayüzün hazır şablon ya da "AI yapımı" görünmesi: mor gradyanlar, parlamalar, emoji etiketler.
-- Takılan, kasan animasyonlar. 500+ oyunluk kütüphanede ızgara 60 fps kaymalı.
-- Uygulamanın kullanıcı izni olmadan internete veri göndermesi. API anahtarı yalnızca yerelde saklanır.
-- Bir platformun launcher'ı kapalıyken uygulamanın çökmesi ya da hata yağdırması.
+- The UI looking like a ready-made template or "AI-made": purple gradients, glows, emoji labels.
+- Stuttering, laggy animations. In a library of 500+ games the grid must scroll at 60 fps.
+- The app sending data to the internet without the user's permission. The API key is stored only locally.
+- The app crashing or spewing errors when a platform's launcher is closed.
 
-## Kısıtlar
+## Constraints
 
-- Windows 11, Türkçe sistem. Kullanıcı adı `user`.
-- Proje yolu: `C:\Users\user\workdir\hangar`.
-- Ortam hazır: Node 26, npm 11, Rust 1.99 (MSVC), VS Build Tools 2022, git 2.56.
-- Geliştirme akışı: Claude kodu bir köprü üzerinden doğrudan bu klasöre yazar, ama Windows'ta komut çalıştıramaz. `npm install` ve `npm run tauri dev` komutlarını kullanıcı Windows terminalinde çalıştırır ve çıktıyı paylaşır. Git commit için Claude'un klasörde silme izni olması gerekir; yoksa commit'leri kullanıcı yapar.
-- Kodlamada en fazla 2-3 Sonnet alt ajanı kullanılır. Karpathy kuralları geçerli: önce düşün, sadelik, sadece gerekeni değiştir, doğrulanabilir hedef koy.
+- Windows 11, Turkish locale. User name `user`.
+- Project path: `C:\Users\user\workdir\hangar`.
+- Environment ready: Node 26, npm 11, Rust 1.99 (MSVC), VS Build Tools 2022, git 2.56.
+- Development flow: Claude writes the code directly into this folder via a bridge, but cannot run commands on Windows. The user runs `npm install` and `npm run tauri dev` in a Windows terminal and shares the output. For git commits, Claude needs delete permission in the folder; otherwise the user makes the commits.
+- At most 2-3 Sonnet subagents are used for coding. The Karpathy rules apply: think first, simplicity, change only what is needed, set a verifiable goal.
 
-## Yaklaşımlar
+## Approaches
 
-| | Yaklaşım | Artı | Eksi |
+| | Approach | Pro | Con |
 |---|---|---|---|
-| A | Playnite 10 forku (C#/WPF) | Entegrasyonlar hazır | Arayüz XAML temalarıyla sınırlı, GSAP/react-bits yok, kod tabanı büyük ve terk edilmek üzere |
-| **B** | **Tauri 2 (Rust arka uç + React arayüz)** | Arayüz tamamen özgür, küçük (~10 MB) ve hızlı uygulama, proje tamamen kullanıcının | Rust öğrenme eğrisi (arka uç küçük kalacak) |
-| C | Electron (her şey TypeScript) | Tek dil, kolay | Ağır uygulama (~150 MB, yüksek RAM) |
+| A | Playnite 10 fork (C#/WPF) | Integrations ready | UI limited to XAML themes, no GSAP/react-bits, large codebase about to be abandoned |
+| **B** | **Tauri 2 (Rust backend + React UI)** | Fully free UI, small (~10 MB) and fast app, project fully the user's | Rust learning curve (the backend will stay small) |
+| C | Electron (everything in TypeScript) | One language, easy | Heavy app (~150 MB, high RAM) |
 
-Python GUI elendi: istenen animasyon kütüphaneleri orada yok.
-**Seçilen: B.** Kullanıcı seçti.
+Python GUI was eliminated: the desired animation libraries are not available there.
+**Chosen: B.** The user chose it.
 
-## Mimari
+## Architecture
 
 ```
 React UI (Vite + TS, GSAP, Lenis, react-bits)
-      │ Tauri komutları (invoke) + olaylar
-Rust çekirdek
-  ├─ providers/        her platform bir LibraryProvider
-  │    steam.rs  epic.rs  ubisoft.rs   (sonra: gog.rs, ea.rs)
-  ├─ merge.rs          aynı oyunu tek kayda birleştirme
-  ├─ db.rs             SQLite (rusqlite) — oyunlar, platform kayıtları, tercihler
-  ├─ artwork.rs        kapak görselleri: bul, önbelleğe al
-  └─ launch.rs         platform linklerini açma
+      │ Tauri commands (invoke) + events
+Rust core
+  ├─ providers/        each platform is a LibraryProvider
+  │    steam.rs  epic.rs  ubisoft.rs   (later: gog.rs, ea.rs)
+  ├─ merge.rs          merging the same game into a single record
+  ├─ db.rs             SQLite (rusqlite) — games, platform entries, preferences
+  ├─ artwork.rs        cover images: find, cache
+  └─ launch.rs         opening platform links
 ```
 
-- **LibraryProvider** sözleşmesi: `id()`, `scan() -> Vec<PlatformEntry>`, `launch(entry)`, `install(entry)`, `is_available()`. Yeni platform eklemek, yeni bir dosya eklemek demek.
-- **Veri modeli:**
-  - `games`: birleşik oyun, görünen ad, normalize ad, kapak yolu, tercih edilen platform.
-  - `platform_entries`: platform, platform içi id, kurulu mu, kurulum yolu, boyut, son oynama, oynama süresi, `game_id`.
-  - `settings`: Steam API anahtarı, SteamID ve benzeri ayarlar.
-- **Birleştirme kuralı:** ad normalizasyonu (küçük harf, ™/®/: gibi işaretleri ve "Edition/Remastered" eklerini atma) ile eşleştirme. Kullanıcı yanlış birleşmeyi elle ayırabilir, eksik birleşmeyi elle birleştirebilir; bu kararlar kalıcıdır.
-- **Tarama akışı:** açılışta önce önbellekteki veritabanı anında gösterilir, tarama arka planda çalışır, değişiklikler olayla arayüze akar. Ayrıca "Yenile" düğmesi var.
+- **LibraryProvider** contract: `id()`, `scan() -> Vec<PlatformEntry>`, `launch(entry)`, `install(entry)`, `is_available()`. Adding a platform means adding a new file.
+- **Data model:**
+  - `games`: merged game, display name, normalized name, cover path, preferred platform.
+  - `platform_entries`: platform, id within the platform, installed or not, install path, size, last played, playtime, `game_id`.
+  - `settings`: Steam API key, SteamID and similar settings.
+- **Merge rule:** matching by name normalization (lowercase, dropping marks like ™/®/: and suffixes like "Edition/Remastered"). The user can manually split a wrong merge and manually merge a missed one; these decisions are persistent.
+- **Scan flow:** on startup the cached database is shown instantly, the scan runs in the background, changes flow to the UI as events. There is also a "Yenile" (Refresh) button.
 
-## Platform veri kaynakları (kodlamadan önce makinede doğrulanacak)
+## Platform data sources (to be verified on the machine before coding)
 
-- **Steam:** kurulum yolu registry'den (`HKCU\Software\Valve\Steam\SteamPath`). Kütüphaneler `steamapps\libraryfolders.vdf` dosyasında, kurulu oyunlar `appmanifest_*.acf` dosyalarında. Kapaklar yerel `appcache\librarycache` klasöründen, yoksa Steam CDN'inden alınır. Sahip olunanlar `IPlayerService/GetOwnedGames` ile çekilir.
-- **Epic:** `C:\ProgramData\Epic\EpicGamesLauncher\Data\Manifests\*.item` (JSON). Başlatma linki `com.epicgames.launcher://apps/<ns>%3A<itemId>%3A<appName>?action=launch&silent=true`.
-- **Ubisoft:** `HKLM\SOFTWARE\WOW6432Node\Ubisoft\Launcher\Installs\<id>`. Başlatma linki `uplay://launch/<id>/0`.
+- **Steam:** install path from the registry (`HKCU\Software\Valve\Steam\SteamPath`). Libraries are in `steamapps\libraryfolders.vdf`, installed games in `appmanifest_*.acf` files. Covers come from the local `appcache\librarycache` folder, otherwise from the Steam CDN. Owned games are fetched with `IPlayerService/GetOwnedGames`.
+- **Epic:** `C:\ProgramData\Epic\EpicGamesLauncher\Data\Manifests\*.item` (JSON). Launch link `com.epicgames.launcher://apps/<ns>%3A<itemId>%3A<appName>?action=launch&silent=true`.
+- **Ubisoft:** `HKLM\SOFTWARE\WOW6432Node\Ubisoft\Launcher\Installs\<id>`. Launch link `uplay://launch/<id>/0`.
 
-## Kullanıcının belirledikleri
+## What the user decided
 
-Tauri; kendi projesi (fork değil); GOG yok; varsayılan platform Steam ve yanında seçici; indir/güncelle platformun kendi launcher'ına devredilir; Windows'ta çalışır; animasyonlar GSAP + Lenis + react-bits; arayüzü birlikte tasarlayacağız.
+Tauri; their own project (not a fork); no GOG; default platform Steam with a selector next to it; download/update delegated to the platform's own launcher; runs on Windows; animations GSAP + Lenis + react-bits; we will design the UI together.
 
-## Claude'un kararları (itiraz edilebilir)
+## Claude's decisions (open to objection)
 
-- Çalışma adı "Hangar"; proje yolu `workdir\hangar`.
-- Sürüm 1'de GOG yok (soru iki kez cevapsız kaldı); EA ve Epic'in kurulu olmayan oyunları da sürüm 1 dışında.
-- SQLite + rusqlite; arayüz tarafında React + TypeScript + Vite + Tailwind.
-- Steam API anahtarı kullanıcıdan istenir ve yalnızca yerelde saklanır.
+- Working name "Hangar"; project path `workdir\hangar`.
+- No GOG in version 1 (the question went unanswered twice); EA and Epic's uninstalled games are also outside version 1.
+- SQLite + rusqlite; on the UI side React + TypeScript + Vite + Tailwind.
+- The Steam API key is requested from the user and stored only locally.
 
-## İnceleme sonrası netleşenler (Claude'un kararları)
+## Decisions clarified after review (Claude's decisions)
 
-- **Doğrulama döngüsü:** kodlamadan önce kullanıcı, salt-okur bir "probe" PowerShell betiği çalıştırır. Betik Epic manifest listesini, Steam `libraryfolders.vdf`, `loginusers.vdf` ve örnek bir `.acf` dosyasını, Ubisoft registry anahtarlarını kaydeder; kişisel bilgiler (hesap adları) maskelenir. Bu örnekler test fixture'ı olur; sağlayıcılar bunlara karşı birim testleriyle yazılır. Sonrasında küçük kilometre taşları: Claude yazar, kullanıcı derleyip çıktıyı paylaşır.
-- **Steam anahtarı isteğe bağlı.** Anahtar yoksa sadece kurulu oyunlar görünür ve kurulu olmayanlar için anahtarı isteyen sade bir boş durum ekranı çıkar. SteamID `loginusers.vdf` dosyasından otomatik bulunur, elle de değiştirilebilir. Anahtar SQLite'ta düz metin olarak durur (tek kullanıcılı, yerel uygulama); kimlik bilgisi kasası kullanılmaz.
-- **İnternet:** telemetri yok. Ağ erişimi sadece Steam Web API ve görsel indirmek için. Uygulamayı kullanmak bu erişimlere onay sayılır; ayrıca bir onay ekranı yok.
-- **Epic ve Ubisoft kapakları:** önce oyun adıyla Steam mağazasında eşleşme aranır (anahtarsız, herkese açık arama) ve Steam görseli kullanılır. Bulunmazsa oyun adıyla üretilmiş, tasarıma uygun bir yer tutucu kapak gösterilir. SteamGridDB ve elle kapak seçme sonraki sürümde.
-- **Kurma düğmesi:** Steam'de `steam://install`. Epic ve Ubisoft'ta düğme ilgili launcher'ı açar; kurulumu kullanıcı orada yapar. Sağlayıcı sözleşmesinde `install()` isteğe bağlı.
-- **Birleştirme:** boyut, son oynama ve süre gibi bilgiler detay panelinde platform platform gösterilir. Kartta en son oynanan platformun bilgisi görünür. Elle verilen ayırma/birleştirme kararları, platform kimlik çiftleriyle anahtarlanan bir `merge_overrides` tablosunda tutulur; böylece yeniden taramadan sonra da geçerli kalır. Bu kararlar detay paneldeki basit bir kontrolle verilir.
-- **Son oynama:** Steam'de Web API'den ya da `.acf` dosyasından gelir. Diğer platformlarda Hangar sadece kendi başlattığı zamanı kaydeder; oyun süreci izlenmez, dolayısıyla oynama süresi yok.
-- **Paketleme:** sürüm 1 sonunda `tauri build` ile bir NSIS kurulum dosyası üretilir; imzalama ve otomatik güncelleme yok. Veritabanı ve görsel önbelleği `%APPDATA%\Hangar` altında.
-- **Arayüz sırası:** veri katmanı önce, işlevsel ama tasarım token'larına bağlı bir iskeletle kurulur. Görsel yön seçilince token'lar ve bileşenler giydirilir. Izgara sanallaştırılmış (virtualized) ve kendi kaydırma alanına sahip; Lenis bu alana bağlanır, GSAP giriş ve geçiş animasyonlarında kullanılır. Kaydırma sırasında her karta ayrı animasyon yapılmaz.
+- **Verification loop:** before coding, the user runs a read-only "probe" PowerShell script. The script records the Epic manifest list, Steam `libraryfolders.vdf`, `loginusers.vdf` and a sample `.acf` file, and the Ubisoft registry keys; personal information (account names) is masked. These samples become test fixtures; providers are written against them with unit tests. After that, small milestones: Claude writes, the user builds and shares the output.
+- **The Steam key is optional.** Without a key only installed games appear, and a plain empty-state screen asks for the key for uninstalled ones. The SteamID is found automatically from `loginusers.vdf` and can also be changed by hand. The key sits in SQLite as plain text (single-user, local app); no credential vault is used.
+- **Internet:** no telemetry. Network access only for the Steam Web API and downloading images. Using the app counts as consent to these; there is no separate consent screen.
+- **Epic and Ubisoft covers:** first a match is searched for by game name in the Steam store (keyless, public search) and the Steam image is used. If none is found, a placeholder cover generated from the game name and matching the design is shown. SteamGridDB and manual cover picking come in a later version.
+- **Install button:** `steam://install` on Steam. On Epic and Ubisoft the button opens the respective launcher; the user does the install there. `install()` is optional in the provider contract.
+- **Merging:** information such as size, last played and duration is shown platform by platform in the detail panel. The card shows the information of the most recently played platform. Manual split/merge decisions are kept in a `merge_overrides` table keyed by platform id pairs, so they remain valid after a rescan. These decisions are given with a simple control in the detail panel.
+- **Last played:** on Steam it comes from the Web API or the `.acf` file. On other platforms Hangar only records the time it launched itself; the game process is not tracked, hence no playtime.
+- **Packaging:** at the end of version 1 an NSIS installer is produced with `tauri build`; no signing and no auto-update. Database and image cache under `%APPDATA%\Hangar`.
+- **UI order:** the data layer comes first, built with a functional skeleton bound to design tokens. Once the visual direction is chosen, tokens and components get dressed. The grid is virtualized and has its own scroll area; Lenis is attached to this area, GSAP is used for entrance and transition animations. No separate per-card animation during scrolling.
 
-## Builder'a bırakılanlar
+## Left to the builder
 
-Dosya ve klasör düzeni, durum yönetimi kütüphanesi, test yaklaşımı, kapak önbelleği biçimi, ad normalizasyonunun ayrıntıları.
+File and folder layout, state management library, test approach, cover cache format, details of name normalization.
 
-## Açık nokta — arayüz
+## Open point — UI
 
-Görsel yön, plan aşamasından önce ayrı bir tur olarak ele alınacak: Dribbble referansları ve 2-3 mockup seçeneği üzerinden kullanıcıyla birlikte seçilecek.
+The visual direction will be handled as a separate round before the planning stage: it will be chosen together with the user from Dribbble references and 2-3 mockup options.
 
-## Görsel yön (seçildi: 2026-11-09)
+## Visual direction (chosen: 2026-11-09)
 
-Kullanıcı 8 mockup arasından **"5 · Kokpit + Vitrin"** yönünü seçti. Referans: https://claude.ai/artifact/LKs8cVUuDnVjv11NVRFuo9 (ilk sekme).
+The user chose the **"5 · Kokpit + Vitrin"** (Cockpit + Showcase) direction among 8 mockups. Reference: https://claude.ai/artifact/LKs8cVUuDnVjv11NVRFuo9 (first tab).
 
-- **Düzen:** solda sabit kenar çubuğu (Kütüphane: Tümü / Kurulu / Favoriler; Platformlar sayaçlı; Koleksiyonlar). Sağda ana alanın üstünde "sahne": seçili oyunun kapağından türeyen bulanık arka plan ışığı, büyük başlık, küçük istatistik şeridi (oynama, son, boyut), bölünmüş Oyna düğmesi ve sağda eğik gölgeli kapak. Altında arama çubuğu (Ctrl K) ve sıralama, onun altında sık kapak ızgarası. Kartlarda platform rozetleri ve kurulu noktası var. Kurulu olmayan oyunlar soluk gösterilir.
-- **Tipografi:** başlıklar Chakra Petch (büyük harf), gövde metni Figtree.
-- **Renk:** koyu arduvaz zemin (#0f1318 civarı), tek vurgu rengi kehribar (#f2a93b), kurulu durumu için yeşil nokta. Sürüm 1'de sadece koyu tema.
-- **Hareket:** sahnede oyun değişince kısa bir çapraz geçiş ve içeriğin kayarak gelmesi (GSAP). Izgara ilk yüklemede kademeli belirir. Kartta hover'da hafif yükselme. Izgaranın kendi kaydırma alanı var ve Lenis o alana bağlanır. `prefers-reduced-motion` ayarına uyulur.
-- **Dar pencerede:** kenar çubuğu gizlenir, sahne tek sütuna iner.
+- **Layout:** fixed sidebar on the left (Library: All / Installed / Favorites; Platforms with counters; Collections). On the right, above the main area, a "stage": a blurred background glow derived from the selected game's cover, a large title, a small stats strip (playtime, last, size), a split Play button and a cover with a slanted shadow on the right. Below it a search bar (Ctrl K) and sorting, below that a dense cover grid. Cards have platform badges and an installed dot. Uninstalled games are shown faded.
+- **Typography:** headings in Chakra Petch (uppercase), body text in Figtree.
+- **Color:** dark slate background (around #0f1318), a single amber accent (#f2a93b), a green dot for the installed state. Only a dark theme in version 1.
+- **Motion:** when the game changes on the stage, a short crossfade and the content sliding in (GSAP). The grid appears staggered on first load. A slight lift on card hover. The grid has its own scroll area and Lenis is attached to it. `prefers-reduced-motion` is respected.
+- **In a narrow window:** the sidebar is hidden, the stage drops to a single column.

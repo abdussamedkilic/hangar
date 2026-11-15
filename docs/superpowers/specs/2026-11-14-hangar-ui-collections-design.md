@@ -1,104 +1,104 @@
-# Hangar — Koleksiyonlar, liste görünümü, tema dosyası · Tasarım
+# Hangar — Collections, list view, theme file · Design
 
-Tarih: 2026-11-14 · Durum: kullanıcı konuşmada onayladı ("okeyim"), belge onayı bekliyor
-Dal: `feat/phase3` (main'den, Faz 2 = PR #5 sonrası)
+Date: 2026-11-14 · Status: the user approved in conversation ("okeyim" — "fine by me"), document approval pending
+Branch: `feat/phase3` (from main, after Phase 2 = PR #5)
 
-## Niyet ve neden
-Hangar "bitti sayılır"; kullanıcı kendi kütüphanesini kendi düzeninde görmek istiyor. Üç istek var:
-1. Steam'deki gibi elle koleksiyonlar.
-2. Kart görünümünün yanında liste görünümü.
-3. VS Code tarzı JSON dosyasıyla renk özelleştirme.
+## Intent and rationale
+Hangar is "considered done"; the user wants to see their own library in their own arrangement. There are three requests:
+1. Manual collections, like Steam's.
+2. A list view next to the card view.
+3. Color customization with a VS Code-style JSON file.
 
-Sıralama mantığı iyi çalışıyor, korunacak. Masaüstü exe her şey bitince yapılacak (bu belgenin dışında). Amazon Games yapılmayacak. Bilinen küçük açıklar ayrı ve paralel bir iş.
+The sorting logic works well and will be kept. The desktop exe will be done when everything is finished (outside this document). Amazon Games will not be done. Known minor gaps are a separate, parallel job.
 
-## Hedefler
-- **Sekme şeridi:** Oyun alanının üstünde yatay bir şerit olur. Sıra her zaman şöyle:
-  - `Tümü`
-  - mağaza sekmeleri: Steam, Epic, GOG, Ubisoft, Riot, Yerel; yalnızca oyunu olanlar görünür
-  - ayraç
-  - kullanıcı koleksiyonları
+## Goals
+- **Tab strip:** a horizontal strip above the game area. The order is always:
+  - `Tümü` (All)
+  - store tabs: Steam, Epic, GOG, Ubisoft, Riot, Yerel (Local); only those with games are visible
+  - separator
+  - user collections
   - `+`
-- **Elle koleksiyon:**
-  - Oluşturma, yeniden adlandırma ve silme.
-  - Oyun ekleme ve çıkarma, karttaki sağ tık menüsünden yapılır.
-  - Bir oyun birden çok koleksiyonda olabilir.
-- **"Kurulu" filtresi** kenar çubuğunda kalır ve şeritteki sekmeyle birlikte uygulanır (ör. Ubisoft + Kurulu). Açıkken şeridin yanında "Kurulu ✕" etiketi görünür.
-- **Görünüm seçimi:** Şeridin sağında Kart/Liste anahtarı olur, seçim kalıcıdır. Kart görünümü varsayılandır.
-- **Liste görünümü:** Satır başına küçük kapak, ad, mağaza rozetleri, kurulu durumu, oynama süresi (varsa) ve Oyna/Kur düğmesi. Sağ tık menüsü ve sıralama kart görünümüyle aynıdır.
-- **Tema dosyası:** `%APPDATA%\com.hangar.app\theme.json` yalnızca renkleri değiştirir.
-  - Ayarlar'da iki düğme: "Tema dosyasını aç" ve "Varsayılana dön".
-  - Hangar dosyayı yeniden okuyunca renkler hemen uygulanır.
-  - Geçersiz değerler yok sayılır ve kısa bir uyarı gösterilir.
+- **Manual collection:**
+  - Creating, renaming and deleting.
+  - Adding and removing games is done from the right-click menu on the card.
+  - A game can be in multiple collections.
+- **The "Kurulu" (Installed) filter** stays in the sidebar and is applied together with the tab in the strip (e.g. Ubisoft + Installed). When on, a "Kurulu ✕" label appears next to the strip.
+- **View choice:** a Card/List switch to the right of the strip; the choice is persistent. The card view is the default.
+- **List view:** per row a small cover, name, store badges, installed status, playtime (if any) and the Oyna/Kur button. The right-click menu and sorting are the same as the card view.
+- **Theme file:** `%APPDATA%\com.hangar.app\theme.json` changes only colors.
+  - Two buttons in Settings: "Tema dosyasını aç" (Open theme file) and "Varsayılana dön" (Back to default).
+  - When Hangar rereads the file, the colors are applied immediately.
+  - Invalid values are ignored and a short warning is shown.
 
-## Hedef dışı
-- Dinamik (kurallı) koleksiyonlar. Kullanıcı gerek görmüyor; mağaza ve Kurulu filtreleri bu ihtiyacı karşılıyor.
-- Steam koleksiyonlarını içe aktarma.
-- Koleksiyonların sürükle-bırak ile sıralanması.
-- Fontlar, boyutlar ve yerleşimin özelleştirilmesi.
-- Birden çok tema arasında geçiş.
+## Non-goals
+- Dynamic (rule-based) collections. The user sees no need; the store and Installed filters meet this need.
+- Importing Steam collections.
+- Ordering collections by drag-and-drop.
+- Customizing fonts, sizes and layout.
+- Switching between multiple themes.
 
-## Anti-hedefler (çalışsa da başarısızlık sayılır)
-- Birleştirme ya da ayırma yapılınca oyunun koleksiyondan düşmesi.
-- Yeniden taramanın koleksiyon üyeliğini silmesi.
-- Sekme şeridinin kalabalıklaşıp kartları aşağı itmesi. Şerit tek satırdır ve sığmazsa yatay kayar.
-- Hatalı bir tema dosyasının arayüzü okunmaz hale getirmesi. Geçersiz renk yok sayılır.
-- Mevcut sıralama ya da arama davranışının değişmesi.
+## Anti-goals (count as failure even if it works)
+- A game dropping out of a collection when merged or split.
+- A rescan deleting collection membership.
+- The tab strip getting crowded and pushing the cards down. The strip is a single row and scrolls horizontally if it does not fit.
+- A faulty theme file making the UI unreadable. An invalid color is ignored.
+- A change in the existing sorting or search behavior.
 
-## Kısıtlar
-- **Yığın:** React 18 + TS + Vite. Renkler `src/styles/tokens.css` içindeki CSS değişkenleridir. Veri SQLite'ta (`crates/hangar-core/src/db.rs`), komutlar `src-tauri/src/commands.rs` içindedir.
-- **Kart kimliği:** Bir kart `games` satırıdır (`norm_title` = kart anahtarı). Birleştirme ya da ayırma kartın satırını değiştirebilir; birleştirilen satır silinir.
-- **Kayıt kimliği:** Kayıt kimliği `"platform:platform_id"` biçimindedir (tercih de bu biçimde saklanır). Taramalar arasında sabittir.
-- **Arayüz:** Görünüm tarzı "Kokpit + Vitrin" korunur (`docs/design/mockups-melez.html`). UI işlerinde design-taste-frontend ve ui-ux-pro-max kurallarına bakılır.
-- **Test:** Yalnızca Tauri penceresinde test edilir (`localhost:1420` tarayıcıda çalışmaz).
+## Constraints
+- **Stack:** React 18 + TS + Vite. Colors are the CSS variables in `src/styles/tokens.css`. Data is in SQLite (`crates/hangar-core/src/db.rs`), commands are in `src-tauri/src/commands.rs`.
+- **Card identity:** A card is a `games` row (`norm_title` = the card key). Merging or splitting can change the card's row; the merged row is deleted.
+- **Record identity:** The record id has the format `"platform:platform_id"` (the preference is also stored in this format). It is stable across scans.
+- **UI:** The visual style "Kokpit + Vitrin" (Cockpit + Showcase) is preserved (`docs/design/mockups-melez.html`). For UI work, the design-taste-frontend and ui-ux-pro-max rules are consulted.
+- **Test:** Tested only in the Tauri window (`localhost:1420` does not work in a browser).
 
-## Yaklaşımlar
-**Koleksiyon üyeliğinin anahtarı**
-1. *Kayıt anahtarıyla (`platform:id`) — seçilen.* Bir kart, kayıtlarından herhangi biri koleksiyondaysa koleksiyonda sayılır. Birleştirme ve ayırmada üyelik kendiliğinden doğru kalır. Ekleme kartın tüm kayıtlarını, çıkarma ise tüm kayıtlarını yazar ya da siler.
-2. *`games.id` ile.* En basiti, ama birleştirmede silinen satırla birlikte üyelik de kaybolur. Bu, anti-hedefe aykırı.
-3. *Kart anahtarıyla (`norm_title`).* Ayırma ve elle birleştirmede kart anahtarı değişince üyelik kopar.
+## Approaches
+**The key of collection membership**
+1. *By record key (`platform:id`) — chosen.* A card counts as in the collection if any of its records is in the collection. Membership stays correct automatically on merge and split. Adding writes all of the card's records, removing deletes all of its records.
+2. *By `games.id`.* The simplest, but on merge the membership is lost together with the deleted row. This violates the anti-goal.
+3. *By card key (`norm_title`).* Membership breaks when the card key changes on split and manual merge.
 
-**Tema dosyasının uygulanması**
-1. *Rust komutu dosyayı okur, ön yüz geçerli renkleri `:root` CSS değişkenlerine yazar; açılışta ve pencere odağa gelince yeniden okunur — seçilen.* Dosya düzenleyicide kaydedilip Hangar'a dönülünce değişiklik anında görünür. İzleyici süreç yok.
-2. *Dosya izleyici (notify).* Daha "canlı", ama ek bağımlılık ve süreç gerektirir. Kazanç küçük.
+**Applying the theme file**
+1. *A Rust command reads the file, the front end writes the valid colors to `:root` CSS variables; it is reread on startup and when the window gets focus — chosen.* When the file is saved in the editor and you return to Hangar, the change is visible instantly. No watcher process.
+2. *A file watcher (notify).* More "live", but requires an extra dependency and process. The gain is small.
 
-**Koleksiyonların yeri:** konuşmada kullanıcı seçti; kenar çubuğu değil, oyun alanının üstündeki şerit.
+**Where collections live:** the user chose in conversation; not the sidebar, but the strip above the game area.
 
-## Kararlaştırılan tasarım
-**Veri** (`db.rs`, yeni tablolar, eski veritabanında `IF NOT EXISTS`):
-- `collections(id INTEGER PK, name TEXT NOT NULL, position INTEGER NOT NULL, created_at INTEGER NOT NULL)`. Ad kırpılır, boş olamaz, büyük-küçük harfe duyarsız olarak tekildir. Yeni koleksiyon sona eklenir.
-- `collection_entries(collection_id INTEGER NOT NULL, platform TEXT NOT NULL, platform_id TEXT NOT NULL, PRIMARY KEY(collection_id, platform, platform_id))`. Koleksiyon silinince satırları da silinir.
-- Tarama `collection_entries`'e dokunmaz. Bir kayıt kütüphaneden düşerse satırı kalır, oyun geri gelince üyelik de geri gelir.
+## Decided design
+**Data** (`db.rs`, new tables, `IF NOT EXISTS` on an old database):
+- `collections(id INTEGER PK, name TEXT NOT NULL, position INTEGER NOT NULL, created_at INTEGER NOT NULL)`. The name is trimmed, cannot be empty, and is unique case-insensitively. A new collection is added at the end.
+- `collection_entries(collection_id INTEGER NOT NULL, platform TEXT NOT NULL, platform_id TEXT NOT NULL, PRIMARY KEY(collection_id, platform, platform_id))`. When a collection is deleted, its rows are deleted too.
+- A scan does not touch `collection_entries`. If a record drops out of the library its row stays; when the game comes back, the membership comes back.
 
-**Komutlar** (`commands.rs`):
+**Commands** (`commands.rs`):
 - `get_collections() -> [{id, name, entries:[EntryKey]}]`
 - `create_collection(name) -> id`
 - `rename_collection(id, name)`
 - `delete_collection(id)`
-- `set_in_collection(id, entries:[EntryKey], member: bool)` — kartın tüm kayıtları tek seferde gönderilir.
+- `set_in_collection(id, entries:[EntryKey], member: bool)` — all of the card's records are sent at once.
 - `get_theme() -> {colors: {key: value}, warnings: [string]}`
-- `open_theme_file()` — dosya yoksa varsayılan içerik ve açıklamayla oluşturulur, sonra sistem düzenleyicisiyle açılır.
-- `reset_theme()` — dosyayı varsayılan içerikle yeniden yazar.
+- `open_theme_file()` — if the file does not exist, it is created with the default content and explanations, then opened with the system editor.
+- `reset_theme()` — rewrites the file with the default content.
 
-**Ön yüz**
-- **Filtre durumu:** Mevcut `Filter` (`"all" | "installed" | Platform`) ikiye ayrılır:
-  - sekme: `"all" | Platform | {collection: id}`
-  - ayrı bir `installedOnly: boolean`
-  - Mevcut `view(games, filter, query, sort)` buna göre uyarlanır. Arama ve sıralama aynı kalır.
-- **Kenar çubuğu:** Mağaza listesi şeride taşınır. Kenar çubuğunda kalanlar:
-  - "Kurulu" anahtarı, sayacıyla
-  - "Oyun ekle", "Yenile", "Ayarlar"
-- **Sekme şeridi:**
-  - Her sekmede sayaç olur. Sayı, "Kurulu" açıksa kurulu oyunlara göre hesaplanır.
-  - Sayısı 0 olan mağaza sekmesi gizlenir. Koleksiyon sekmeleri 0 olsa da görünür.
-  - Aktif sekme gizlenirse `Tümü`'ne dönülür. Bu, kenar çubuğundaki eski "sıfırda kaybolan satır" açığının şeritteki karşılığını da kapatır.
-- **Koleksiyon sekmesi:**
-  - `+` tıklanınca şeritte satır içi bir ad alanı açılır.
-  - Sekmeye sağ tıklayınca "Yeniden adlandır" ve "Sil" çıkar. Silme onay ister; oyunlar kütüphanede kalır.
-- **Kart ve satır sağ tık menüsü:** "Koleksiyona ekle ›" alt menüsü olur. Kartın içinde olduğu koleksiyonlar işaretli görünür ve tıklanınca kart çıkarılır. Alt menüde "Yeni koleksiyon…" da bulunur.
-- **Liste görünümü:** Mevcut sanal liste (`@tanstack/react-virtual`) satır yüksekliğiyle kullanılır. Seçili oyun ve Vitrin davranışı kart görünümündekiyle aynıdır.
-- **Görünüm tercihi:** `settings` tablosunda `ui.view = "grid" | "list"` olarak saklanır.
+**Front end**
+- **Filter state:** The existing `Filter` (`"all" | "installed" | Platform`) is split in two:
+  - tab: `"all" | Platform | {collection: id}`
+  - a separate `installedOnly: boolean`
+  - The existing `view(games, filter, query, sort)` is adapted accordingly. Search and sorting stay the same.
+- **Sidebar:** The store list moves to the strip. What remains in the sidebar:
+  - the "Kurulu" switch, with its counter
+  - "Oyun ekle" (Add game), "Yenile" (Refresh), "Ayarlar" (Settings)
+- **Tab strip:**
+  - Each tab has a counter. The number is computed by installed games if "Kurulu" is on.
+  - A store tab with a count of 0 is hidden. Collection tabs are visible even at 0.
+  - If the active tab is hidden, it returns to `Tümü`. This also closes the strip's counterpart of the old sidebar "row that disappears at zero" gap.
+- **Collection tab:**
+  - When `+` is clicked, an inline name field opens in the strip.
+  - Right-clicking the tab shows "Yeniden adlandır" (Rename) and "Sil" (Delete). Deleting asks for confirmation; the games stay in the library.
+- **Right-click menu of the card and row:** has a "Koleksiyona ekle ›" (Add to collection) submenu. The collections the card is in appear checked, and clicking removes the card. The submenu also has "Yeni koleksiyon…" (New collection…).
+- **List view:** The existing virtual list (`@tanstack/react-virtual`) is used with a row height. Selected game and Showcase behavior are the same as in the card view.
+- **View preference:** Stored in the `settings` table as `ui.view = "grid" | "list"`.
 
-**Tema anahtarları** (JSON adı → CSS değişkeni):
+**Theme keys** (JSON name → CSS variable):
 
 | JSON | CSS |
 |---|---|
@@ -113,55 +113,55 @@ Sıralama mantığı iyi çalışıyor, korunacak. Masaüstü exe her şey bitin
 | `onAccent` | `--on-accent` |
 | `installed` | `--installed` |
 
-- Kabul edilen değerler: `#rgb`, `#rrggbb`, `#rrggbbaa`, `rgb()/rgba()/hsl()` (ön yüzde `CSS.supports('color', v)` ile doğrulanır).
-- Bilinmeyen anahtar ya da geçersiz değer, değişkeni varsayılanda bırakır ve uyarı satırı üretir.
-- Dosya bozuk JSON ise hiçbir renk uygulanmaz ve uyarı gösterilir.
-- Varsayılan dosyada her anahtarın açıklaması bulunur. JSON yorum desteklemediği için açıklamalar `"_yardım"` anahtarında durur ve yok sayılır.
-- Uyarılar mevcut üst `notice` satırında gösterilir.
+- Accepted values: `#rgb`, `#rrggbb`, `#rrggbbaa`, `rgb()/rgba()/hsl()` (validated in the front end with `CSS.supports('color', v)`).
+- An unknown key or an invalid value leaves the variable at the default and produces a warning line.
+- If the file is broken JSON, no color is applied and a warning is shown.
+- The default file has an explanation for each key. Since JSON does not support comments, the explanations sit in a `"_yardım"` (help) key and are ignored.
+- Warnings are shown in the existing top `notice` row.
 
-## Kurucu kontrolünden sonra netleşenler (Opus'un kararları, kullanıcı itiraz edebilir)
-- **Mağaza sekmesi:** Bugünkü kural korunur: kartın herhangi bir kaydı o mağazadaysa kart sekmede görünür. Birleşik bir Steam+Ubisoft kartı iki sekmede de çıkar; mağaza sayaçlarının toplamı "Tümü"ne eşit olmaz.
-- **Kurulu + mağaza sekmesi (kullanıcı: "her zaman öncelik Steam"):** Mağaza sekmesindeyken "Kurulu", o mağazanın kaydı kurulu olan kartları gösterir. Steam'den kurulu Watch_Dogs "Ubisoft + Kurulu"da görünmez, "Steam + Kurulu"da görünür. "Tümü" ve koleksiyon sekmelerinde kartın herhangi bir kaydının kurulu olması yeterlidir. Sayaçlar da aynı kurala göre hesaplanır.
-- **Steam önceliği:** Bir kartta birden çok kurulu kopya varsa ve kullanıcı bir tercih seçmemişse "Oyna" Steam kopyasını açar. Bugünkü "en son oynanan kazanır" kuralı (`db.rs` `default_entry`), Steam dışındaki kopyalar arasında geçerli kalır. Rozet sırasında Steam zaten ilk sırada.
-- **Koleksiyon üyeliği:**
-  - Kartın herhangi bir kaydı koleksiyondaysa kart üye sayılır ve menüde işaretli görünür.
-  - Ekleme kartın o anki tüm kayıtlarını yazar; çıkarma tüm kayıtlarını siler.
-  - Sonradan gelen yeni bir mağaza kopyası ayrıca yazılmaz; kart eski kaydı üzerinden üye kalır.
-- **Kalıcılık:** Aktif sekme ve "Kurulu" durumu `settings` tablosunda (`ui.tab`, `ui.installed`) saklanır. Kayıtlı sekme artık yoksa `Tümü` açılır.
-- **Tema yeniden okuma:**
-  - Galaxy'nin 10 sn'lik sınırına bağlı değildir; her odakta yapılır. Okuma ucuzdur.
-  - Uyarı yalnızca uyarı listesi değişince gösterilir.
-  - "Varsayılana dön" dosyayı yazar ve renkleri hemen yeniden uygular.
-- **Varsayılan renkler:** Değerlerin kaynağı `tokens.css`'tir. Rust şablonu aynı değerleri içerir ve bir test, `tokens.css`'teki 10 değerle şablonun aynı olduğunu doğrular. `accent`'ten türetilmiş sabit rgba renkleri varsa `color-mix(... var(--accent) ...)`'e çevrilir; böylece accent değişince parıltılar da değişir.
-- **Alt menü:** Bağlam menüsüne açılır alt menü desteği eklenir. Menü ve alt menü pencere kenarına sığacak biçimde konumlanır; bu, bilinen "menü kenardan taşar" açığını da kapatır. Aynı menü liste satırlarında da kullanılır.
-- **Koleksiyon sırası ve adı:**
-  - `position` yalnızca oluşturma sırasını tutar; yeniden adlandırma ve silme sırayı değiştirmez.
-  - Tekillik kontrolü Rust'ta Türkçe duyarlı küçük harfle yapılır (İ/ı); SQLite NOCASE kullanılmaz.
-- **"Yeni koleksiyon…" (sağ tık):** Koleksiyonu oluşturur ve kartı ekler. Aktif sekme değişmez.
-- **Silme:** Aktif koleksiyon silinirse `Tümü`'ne dönülür.
+## Points clarified after the builder check (Opus's decisions, the user can object)
+- **Store tab:** Today's rule is preserved: a card appears in a tab if any of its records is in that store. A merged Steam+Ubisoft card shows up in both tabs; the sum of the store counters does not equal "Tümü".
+- **Installed + store tab (user: "Steam always has priority"):** While in a store tab, "Kurulu" shows cards whose record in that store is installed. Watch_Dogs installed from Steam does not appear in "Ubisoft + Kurulu", it appears in "Steam + Kurulu". In "Tümü" and collection tabs, it is enough for any record of the card to be installed. Counters are computed by the same rule.
+- **Steam priority:** If a card has multiple installed copies and the user has not chosen a preference, "Oyna" opens the Steam copy. Today's "most recently played wins" rule (`db.rs` `default_entry`) stays valid among copies other than Steam. In the badge order Steam is already first.
+- **Collection membership:**
+  - If any record of the card is in the collection, the card counts as a member and appears checked in the menu.
+  - Adding writes all of the card's current records; removing deletes all of its records.
+  - A new store copy arriving later is not written separately; the card stays a member through its old record.
+- **Persistence:** The active tab and the "Kurulu" state are stored in the `settings` table (`ui.tab`, `ui.installed`). If the saved tab no longer exists, `Tümü` opens.
+- **Rereading the theme:**
+  - It is not bound to Galaxy's 10 s limit; it is done on every focus. Reading is cheap.
+  - The warning is shown only when the warning list changes.
+  - "Varsayılana dön" writes the file and reapplies the colors immediately.
+- **Default colors:** The source of the values is `tokens.css`. The Rust template contains the same values and a test verifies that the template equals the 10 values in `tokens.css`. If there are fixed rgba colors derived from `accent`, they are converted to `color-mix(... var(--accent) ...)`; so when accent changes, the glows change too.
+- **Submenu:** Open-out submenu support is added to the context menu. The menu and submenu are positioned to fit the window edge; this also closes the known "menu overflows the edge" gap. The same menu is used in list rows too.
+- **Collection order and name:**
+  - `position` keeps only the creation order; renaming and deleting do not change the order.
+  - The uniqueness check is done in Rust with Turkish-aware lowercasing (İ/ı); SQLite NOCASE is not used.
+- **"Yeni koleksiyon…" (right-click):** Creates the collection and adds the card. The active tab does not change.
+- **Deleting:** If the active collection is deleted, it returns to `Tümü`.
 
-## Kurucuya kalanlar
-- Şerit, satır ve sekme bileşenlerinin dosya bölümü ve adlandırma.
-- Liste satırının tam ölçüleri, ince görsel ayrıntılar (mevcut token'larla, "Kokpit + Vitrin" çizgisinde).
-- Satır içi ad alanının klavye davranışı: Enter kaydeder, Esc iptal eder (önerilen).
+## Left to the builder
+- File division and naming of the strip, row and tab components.
+- The exact dimensions of the list row, fine visual details (with the existing tokens, in the "Kokpit + Vitrin" line).
+- Keyboard behavior of the inline name field: Enter saves, Esc cancels (recommended).
 
-## Test
-- **Çekirdek:**
-  - koleksiyon CRUD
-  - tekil ad
-  - birleştirme ve ayırma sonrası üyeliğin korunması
-  - yeniden taramanın üyeliği silmemesi
-  - tema dosyası: okuma, bozuk JSON, bilinmeyen anahtar
-- **Ön yüz (vitest):**
-  - sekme ve Kurulu birleşimi
-  - sayaçlar
-  - koleksiyon sekmesi filtrelemesi
-  - liste ve kart anahtarı
-  - geçersiz renk yok sayma
-- **Canlı:**
-  1. "AC" koleksiyonu oluştur, 3 oyun ekle.
-  2. Yeniden tara: üyelik duruyor.
-  3. Ubisoft + Kurulu.
-  4. Liste görünümü, uygulama yeniden açılınca hatırlanıyor.
-  5. `accent`'i değiştir, Hangar'a dön: renk değişti.
-  6. Bozuk JSON: varsayılan renkler ve uyarı.
+## Tests
+- **Core:**
+  - collection CRUD
+  - unique name
+  - membership preserved after merge and split
+  - a rescan not deleting membership
+  - theme file: reading, broken JSON, unknown key
+- **Front end (vitest):**
+  - tab and Installed combination
+  - counters
+  - collection tab filtering
+  - list and card switch
+  - ignoring an invalid color
+- **Live:**
+  1. Create an "AC" collection, add 3 games.
+  2. Rescan: the membership is still there.
+  3. Ubisoft + Installed.
+  4. List view, remembered when the app is reopened.
+  5. Change `accent`, return to Hangar: the color changed.
+  6. Broken JSON: default colors and a warning.

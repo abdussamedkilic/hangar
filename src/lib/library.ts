@@ -134,7 +134,7 @@ export function view(games: Game[], t: Tab, f: ActiveFilter, saved: SavedFilter[
   return out.map(({ g }) => g);
 }
 
-/** Sıralamasız, aramasız sayı (kenar çubuğu sayaçları için). */
+/** Count without sorting or search (for the sidebar counters). */
 export function filterCount(games: Game[], t: Tab, f: ActiveFilter, saved: SavedFilter[], cols: Collection[]): number {
   return games.filter((g) => inTab(g, t, cols) && passes(g, t, f, saved, cols)).length;
 }

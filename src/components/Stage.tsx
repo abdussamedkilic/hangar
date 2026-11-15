@@ -106,9 +106,9 @@ export default function Stage({ game, onLaunch, onChoose, onSplit, onEdit, onRem
                 <div className="play-menu" role="menu">
                   {canSplit && <button role="menuitem" onClick={() => { setMore(false); onSplit!(game); }}>Bu kayıtları ayır</button>}
                   {canEdit && <button role="menuitem" onClick={() => { setMore(false); onEdit!(game); }}>Düzenle</button>}
-                  {canEdit && <button role="menuitem" onClick={() => {
+                  {canEdit && <button role="menuitem" onClick={async () => {
                     setMore(false);
-                    if (window.confirm(`“${game.title}” Hangar'dan kaldırılsın mı? Oyun dosyaları silinmez.`)) onRemove!(game);
+                    if (await window.confirm(`“${game.title}” Hangar'dan kaldırılsın mı? Oyun dosyaları silinmez.`)) onRemove!(game);
                   }}>Kaldır</button>}
                 </div>
               )}

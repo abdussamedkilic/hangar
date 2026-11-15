@@ -60,7 +60,7 @@ impl EpicApi for HttpEpicApi {
         let mut req = ureq::get(&url)
             .timeout(TIMEOUT)
             .set("Authorization", &format!("bearer {access}"));
-        // Canlı doğrulandı: virgülle birleştirilmiş kimlikler `{}` döner; her kimlik ayrı id parametresi olmalı.
+        // Verified live: comma-joined ids return `{}`; each id must be its own `id` parameter.
         for id in ids {
             req = req.query("id", id);
         }

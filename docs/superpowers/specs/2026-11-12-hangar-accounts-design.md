@@ -1,206 +1,206 @@
-# Hangar — Epic için yerel hesap bağlantısı · Tasarım
+# Hangar — Local account connection for Epic · Design
 
-Tarih: 2026-11-12 · Durum: konseyden geçti, kullanıcı onayı bekliyor · Önceki: `2026-11-11-hangar-step1-design.md`
+Date: 2026-11-12 · Status: passed the council, awaiting user approval · Previous: `2026-11-11-hangar-step1-design.md`
 
-## Niyet ve neden
+## Intent and rationale
 
-Hangar bugün Epic ve Ubisoft'ta yalnızca **kurulu** oyunları gösteriyor (Epic `.item` manifestleri, Ubisoft kayıt defteri). Kullanıcı bu iki hesaptaki oyunların **tamamını**, kurulu olmayanlar dahil, Steam ve GOG'daki gibi tek kütüphanede görmek istiyor.
+Today Hangar shows only **installed** games for Epic and Ubisoft (Epic `.item` manifests, Ubisoft registry). The user wants to see **all** games on these two accounts, including uninstalled ones, in a single library, like Steam and GOG.
 
-Kullanıcının kararı (2026-11-12): **GOG Galaxy kullanılmayacak.** Yol Playnite'ınki gibi olacak:
-- Bağlantı uygulamanın içinde kurulur.
-- Hiçbir veri kullanıcının bilgisayarından çıkmaz; Hangar'ın kendi sunucusu ve telemetrisi yok.
-- Giriş platformun **kendi sayfasında** yapılır, Hangar şifreyi hiç görmez.
+The user's decision (2026-11-12): **GOG Galaxy will not be used.** The path will be like Playnite's:
+- The connection is set up inside the app.
+- No data leaves the user's computer; Hangar has no server or telemetry of its own.
+- Sign-in happens on the platform's **own page**; Hangar never sees the password.
 
-Bu belge **yalnızca Epic'i** kapsar. Ubisoft ayrı bir keşif görevine (U0) ve ardından ayrı bir plana bırakıldı (bkz. "Sonraki iş: Ubisoft"). Bu, konseyin ortak kararı.
+This document covers **only Epic**. Ubisoft is left to a separate discovery task (U0) and then a separate plan (see "Next work: Ubisoft"). This is the council's joint decision.
 
-Başarı ölçütü:
-- Ayarlar › Hesaplar'dan "Epic'e bağlan"a tıklanır, Epic'in giriş penceresinde giriş yapılır, pencere kendiliğinden kapanır.
-- Bundan sonraki taramada Epic hesabındaki bütün oyunlar gelir. Kurulu olanlar mevcut kartlarla birleşir, olmayanlar "Kur" kartı olur.
-- Uygulama kapatılıp açıldığında yeniden giriş istenmez.
-- "Bağlantıyı kes" hem yerel dosyayı siler hem Epic'teki oturumu kapatır.
+Success criteria:
+- From Settings › Hesaplar (Accounts), click "Epic'e bağlan" (Connect to Epic), sign in in Epic's sign-in window, the window closes by itself.
+- On the next scan, all games on the Epic account arrive. Installed ones merge with the existing cards, the others become "Kur" (Install) cards.
+- Closing and reopening the app does not ask for sign-in again.
+- "Bağlantıyı kes" (Disconnect) both deletes the local file and ends the session on Epic.
 
-## Hedefler
+## Goals
 
-1. **Epic bağlantısı:** uygulama içi giriş penceresi → yetki kodu → OAuth belgesi.
-   - Sahip olunan oyunlar Epic'in kütüphane ve katalog servislerinden alınır.
-   - Bedava dağıtılan oyunlar dahildir. DLC, eklenti ve Unreal Engine varlıkları dahil değildir.
-2. **Yerel ve şifreli belge:** yenileme belgesi yalnızca `%APPDATA%\com.hangar.app\accounts\epic.dat` dosyasında, Windows DPAPI (CurrentUser) ile şifreli tutulur.
-3. **Ayarlar › Hesaplar bölümü:** Epic için durum ("Bağlı değil" / "Bağlı · <görünen ad>" / "Süresi doldu"), "Bağlan" ve "Bağlantıyı kes" düğmeleri.
-4. **Kurulu olmayanı kurma:** "Kur" düğmesi, Steam ve GOG'da olduğu gibi Epic launcher'ında kurulumu açar.
-5. **Çevrimdışı dayanıklılık:** ağ yoksa ya da belge geçersizse son bilinen sahip olunan liste kullanılır. Üstteki uyarı satırında ne yapılması gerektiği yazar.
-6. **README güvenlik notu:** belgenin nerede durduğu, nasıl silindiği, riskler (bkz. §7).
+1. **Epic connection:** in-app sign-in window → authorization code → OAuth token.
+   - Owned games are fetched from Epic's library and catalog services.
+   - Games given away for free are included. DLC, add-ons and Unreal Engine assets are not included.
+2. **Local and encrypted token:** the refresh token is kept only in `%APPDATA%\com.hangar.app\accounts\epic.dat`, encrypted with Windows DPAPI (CurrentUser).
+3. **Settings › Hesaplar section:** status for Epic ("Bağlı değil" / "Bağlı · <display name>" / "Süresi doldu") (Not connected / Connected · <display name> / Expired), "Bağlan" (Connect) and "Bağlantıyı kes" buttons.
+4. **Installing the uninstalled:** the "Kur" button opens the install in the Epic launcher, as on Steam and GOG.
+5. **Offline resilience:** if there is no network or the token is invalid, the last known owned list is used. The top warning row says what to do.
+6. **README security note:** where the token is kept, how to delete it, the risks (see §7).
 
-## Hedef dışı
+## Non-goals
 
-- GOG Galaxy entegrasyonu. Kullanıcı reddetti; bir daha önerilmeyecek.
-- **Ubisoft** (bu planda ne arayüz satırı ne README metni olacak; yalnızca ortak altyapı platform parametresi alır).
-- EA app, Amazon Games, Battle.net ve diğer platformlar. Genel bir "sahip olunan sağlayıcı" katmanı da hedef dışı.
-- Katalogdaki görselleri kapak olarak kullanmak. Olası sonraki iş olarak not edildi, bu planda yok.
-- Oynama süresi, başarımlar, arkadaşlar, bulut kayıtları.
-- Hangar'ın oyunu kendisinin indirmesi ya da kurması.
-- Birden fazla Epic hesabı.
-- Belgeyi saklamayan ("her seferinde giriş") mod. Konseyde önerildi, kullanıcı kalıcı belgeyi seçmişti; README'de "istemezsen bağlantıyı kes" notu yeterli.
+- GOG Galaxy integration. The user rejected it; it will not be suggested again.
+- **Ubisoft** (this plan will have neither a UI row nor README text for it; only the shared infrastructure takes a platform parameter).
+- EA app, Amazon Games, Battle.net and other platforms. A general "owned provider" layer is also a non-goal.
+- Using catalog images as covers. Noted as possible later work, not in this plan.
+- Playtime, achievements, friends, cloud saves.
+- Hangar downloading or installing the game itself.
+- Multiple Epic accounts.
+- A mode that does not store the token ("sign in every time"). Proposed in the council, the user had chosen the persistent token; a "disconnect if you don't want it" note in the README is enough.
 
-## Anti-hedefler (çalışsa bile başarısızlık sayılacaklar)
+## Anti-goals (count as failure even if it works)
 
-- Belgenin, access token'ın ya da yetki kodunun **herhangi bir yere** yazılması:
-  - log, hata mesajı, uyarı satırı, SQLite, `settings` tablosu, panik çıktısı, test fixture'ı.
-  - Hata mesajları en fazla HTTP durum kodunu ve kısa bir açıklamayı içerir; yanıt gövdesini içermez.
-- Giriş sayfasının (uzak bir web sayfasının) Hangar'ın Tauri komutlarını çağırabilmesi.
-- Giriş penceresinin diskte çerez ya da oturum bırakması. Hangar'ın şifreli dosyası dışında ikinci bir kalıcı oturum olmamalı.
-- Giriş penceresinin Epic'in giriş akışı dışında rastgele sitelere gidebilmesi.
-- Bağlantı koptuğunda kullanıcının kütüphanesindeki oyunların sessizce kaybolması.
-- Şifre isteyen kendi giriş formu.
-- Başarılı girişten sonra uygulamanın "donmuş" görünmesi.
+- The token, the access token or the authorization code being written to **anywhere**:
+  - log, error message, warning row, SQLite, the `settings` table, panic output, test fixture.
+  - Error messages contain at most the HTTP status code and a short description; they do not contain the response body.
+- The sign-in page (a remote web page) being able to call Hangar's Tauri commands.
+- The sign-in window leaving cookies or a session on disk. There must be no second persistent session apart from Hangar's encrypted file.
+- The sign-in window being able to navigate to arbitrary sites outside Epic's sign-in flow.
+- The games in the user's library silently disappearing when the connection drops.
+- A custom sign-in form that asks for a password.
+- The app looking "frozen" after a successful sign-in.
 
-## Kısıtlar
+## Constraints
 
-- Windows 11, Tauri **2.12.5** (wry 0.57.1; `Cargo.lock`'ta doğrulandı), Rust, React 18 + TS.
-  - `WebviewWindowBuilder` bu sürümde `incognito()`, `initialization_script()`, `on_navigation()` ve `on_new_window()` sunuyor; sürüm yükseltmek gerekmiyor.
-  - Windows'ta `incognito()`, WebView2 InPrivate'a karşılık geliyor.
-- `hangar-core` saf ve Tauri'siz; Linux/WSL'de test edilir.
-  - Ağ çağrıları ve DPAPI trait arkasında olmalı.
-  - Ayrıştırma kodu fixture'larla test edilir.
-- HTTP için mevcut `ureq = "2"` kullanılır. Çağrılar engelleyici olduğu için `spawn_blocking` içinde çalışır.
-- DPAPI için `windows-sys` (`cfg(windows)` altında) kullanılır; başka yeni bağımlılık en az tutulur.
-- `scan_all` bugün yalnızca Steam'in sahip olunan listesini alıyor (`owned: Option<Result<Vec<PlatformEntry>, ProviderError>>`). Bu imza platform başına bir haritaya genişletilir.
-- `tauri dev` açıkken Rust düzenlemek uygulamayı yeniden başlatır; elle testlerde dikkat.
-- Kullanıcının kuralları:
-  - İstenmeyen özellik yok, cerrahi değişiklik.
-  - Alt ajanlar Sonnet ve aynı anda en fazla 2–3.
-  - Commit mesajları Türkçe conventional.
+- Windows 11, Tauri **2.12.5** (wry 0.57.1; verified in `Cargo.lock`), Rust, React 18 + TS.
+  - In this version `WebviewWindowBuilder` offers `incognito()`, `initialization_script()`, `on_navigation()` and `on_new_window()`; no version upgrade is needed.
+  - On Windows, `incognito()` corresponds to WebView2 InPrivate.
+- `hangar-core` is pure and Tauri-free; tested on Linux/WSL.
+  - Network calls and DPAPI must be behind a trait.
+  - Parsing code is tested with fixtures.
+- For HTTP the existing `ureq = "2"` is used. Since the calls are blocking, they run inside `spawn_blocking`.
+- For DPAPI, `windows-sys` (under `cfg(windows)`) is used; other new dependencies are kept to a minimum.
+- `scan_all` today only fetches Steam's owned list (`owned: Option<Result<Vec<PlatformEntry>, ProviderError>>`). This signature is widened to a per-platform map.
+- Editing Rust while `tauri dev` is open restarts the app; be careful in manual tests.
+- The user's rules:
+  - No unrequested features, surgical changes.
+  - Subagents are Sonnet, at most 2-3 at a time.
+  - Commit messages are Turkish conventional.
 
-## Yaklaşımlar
+## Approaches
 
-Ana soru girişin nasıl yakalanacağıydı.
+The main question was how the sign-in would be captured.
 
-- **A — Hangar penceresi, otomatik yakalama (seçildi).** Hangar Epic'in giriş sayfasını kendi ayrı penceresinde açar. Giriş bitince kodu kendisi alır ve pencereyi kapatır. Kullanıcı açısından tek tık. Bedeli: Epic sayfayı değiştirirse ya da gömülü tarayıcıyı engellerse yakalama kırılabilir.
-- **B — Sistem tarayıcısı + kodu elle yapıştırma (Legendary yolu).** Basit ve daha az kırılgan, ama her bağlanmada elle iş var. Yaklaşık 30 satırlık bir iş; E0 başarısız olursa kullanıcıya önerilecek yedek yol budur.
-- **C — GOG Galaxy'den okumak.** Kullanıcı reddetti.
+- **A — Hangar window, automatic capture (chosen).** Hangar opens Epic's sign-in page in its own separate window. When sign-in is done, it takes the code itself and closes the window. One click from the user's point of view. Cost: if Epic changes the page or blocks embedded browsers, the capture can break.
+- **B — System browser + pasting the code by hand (the Legendary way).** Simple and less fragile, but there is manual work on every connect. About 30 lines of work; this is the fallback path to be offered to the user if E0 fails.
+- **C — Reading from GOG Galaxy.** The user rejected it.
 
-Kullanıcı **A**'yı seçti (2026-11-12).
+The user chose **A** (2026-11-12).
 
-## Kullanıcının kararlaştırdıkları
+## What the user decided
 
-- Galaxy yok; uygulama içi bağlantı; veri yalnızca bu PC'de.
-- Giriş Epic'in kendi sayfasında, Hangar'ın ayrı penceresinde (yaklaşım A).
-- Belge yerelde, DPAPI ile şifreli; "Bağlantıyı kes" siler; asla loglanmaz; sunucu ya da telemetri yok.
-- Ayarlar'da "Hesaplar" bölümü; README'de güvenlik notu.
+- No Galaxy; in-app connection; data only on this PC.
+- Sign-in on Epic's own page, in Hangar's separate window (approach A).
+- Token local, encrypted with DPAPI; "Bağlantıyı kes" deletes it; never logged; no server or telemetry.
+- "Hesaplar" section in Settings; security note in the README.
 
-## Tasarım
+## Design
 
-### 0. Görev E0 — keşif (önce bu; en fazla bir oturum)
+### 0. Task E0 — discovery (this first; at most one session)
 
-Önce yalnızca giriş penceresi ve yakalama yapılır, gizli bir geliştirme komutunun arkasında (ör. `debug_assertions` altında). Kullanıcı gerçek Epic hesabıyla bir kez giriş yapar.
+First only the sign-in window and capture are built, behind a hidden development command (e.g. under `debug_assertions`). The user signs in once with a real Epic account.
 
-**Başarılı sayılması için hepsi gerekli:**
-1. Giriş, iki adımlı doğrulama dahil, gömülü pencerede tamamlanıyor.
-2. Başlatma betiği `authorizationCode`'u okuyor. `on_navigation`, `https://hangar.invalid/callback` adresine yapılan `location.replace`'i görüp iptal edebiliyor.
-3. Kod, token ucunda belgeye çevrilebiliyor. Kütüphane ve katalog çağrıları yanıt veriyor.
-4. Pencere kapandıktan sonra WebView2 veri klasöründe Epic çerezi ya da oturumu kalmıyor (InPrivate doğrulaması).
-5. Token, kütüphane ve katalog yanıtları bir **temizleme betiğiyle** fixture'a çevriliyor. Fixture'larda hesap kimliği, görünen ad, e-posta ve belgeler bulunmuyor; betik bunları sabit sahte değerlerle değiştiriyor ve çıktıda gerçek değer kalmadığını denetliyor.
+**All of these are required for it to count as successful:**
+1. Sign-in, including two-step verification, completes in the embedded window.
+2. The initialization script reads `authorizationCode`. `on_navigation` can see and cancel the `location.replace` to `https://hangar.invalid/callback`.
+3. The code can be exchanged for a token at the token endpoint. The library and catalog calls respond.
+4. After the window closes, no Epic cookie or session remains in the WebView2 data folder (InPrivate verification).
+5. The token, library and catalog responses are turned into fixtures by a **scrubbing script**. The fixtures contain no account ID, display name, email or tokens; the script replaces them with fixed fake values and checks that no real value remains in the output.
 
-**Başarısız sayılır:** captcha ya da bot kontrolü gömülü pencerede geçilemiyor, Epic girişi reddediyor ya da 2 numaralı yakalama çalışmıyor. Bu durumda iş durur. Kullanıcıya B (kodu elle yapıştırma) önerilir; kendiliğinden B'ye geçilmez.
+**Counts as failed:** the captcha or bot check cannot be passed in the embedded window, Epic rejects the sign-in, or capture no. 2 does not work. In that case the work stops. B (pasting the code by hand) is suggested to the user; it does not switch to B by itself.
 
-E0'dan önce uç adresleri ve istemci kimliği Legendary'nin güncel kaynağıyla karşılaştırıldı (2026-11-12). Aşağıdaki adresler ve parametreler aynı.
+Before E0, the endpoint addresses and the client ID were compared with Legendary's current source (2026-11-12). The addresses and parameters below are the same.
 
-### 1. Giriş penceresi ve kodun yakalanması
+### 1. Sign-in window and capturing the code
 
-`src-tauri` bir komut sunar: `connect_account(platform)`. Bu komut aşağıdakileri yapar.
+`src-tauri` exposes a command: `connect_account(platform)`. This command does the following.
 
-1. `WebviewWindowBuilder` ile `account-login` etiketli **ayrı** bir pencere açılır. Adres Epic'in giriş sayfasıdır. Pencere `incognito(true)` ile açılır.
-2. **Pencere başlığı gerçek adresi gösterir** (ör. "Epic Games girişi — www.epicgames.com"). Böylece kullanıcı nerede olduğunu görür ve pencere kimlik avı gibi görünmez.
-3. **Başlatma betiği** (initialization script) şunları yapar:
-   - Yalnızca üst çerçevede (`window.top === window`) çalışır.
-   - `location.origin === 'https://www.epicgames.com'` ve `location.pathname === '/id/api/redirect'` koşulunu arar.
-   - `DOMContentLoaded`'dan sonra `document.body.innerText`'i JSON olarak ayrıştırır.
-   - `authorizationCode` doluysa `location.replace('https://hangar.invalid/callback?code=' + encodeURIComponent(code))` yapar. Boşsa hiçbir şey yapmaz.
-4. **`on_navigation`** işleyicisi şöyle davranır:
-   - `hangar.invalid` gelince gezinmeyi iptal eder (`false`), kodu ayrıştırır ve bir `oneshot` kanalıyla komuta iletir, ardından pencereyi kapatır.
-   - **İzin listesi:** diğer gezinmelerde yalnızca `https` ve izinli alan adlarına izin verilir: `epicgames.com` ve alt alan adları, ayrıca E0'da gözlenen captcha ve kimlik sağlayıcı alanları (ör. hCaptcha/Arkose, Google, Apple, Xbox/Microsoft, Steam, PlayStation, Nintendo, Facebook). Liste kodda tek bir sabit dizidir.
-5. **`on_new_window`:** açılır pencereler aynı pencerede açılır (izin listesine tabi) ya da engellenir. Hangisinin olacağını E0 belirler: Google, Apple gibi kimlik sağlayıcılarla giriş açılır pencere istiyorsa aynı pencerede açılır.
-6. **Pencerenin `Destroyed` olayı:** kanal hâlâ boşsa komut "iptal edildi" ile döner. Kullanıcıya uyarı gösterilmez.
-7. **Zaman aşımı:** 5 dakika içinde kod gelmezse pencere kapanır, komut "Giriş zaman aşımına uğradı" ile döner.
+1. A **separate** window labeled `account-login` is opened with `WebviewWindowBuilder`. The address is Epic's sign-in page. The window is opened with `incognito(true)`.
+2. **The window title shows the real address** (e.g. "Epic Games girişi — www.epicgames.com") (Epic Games sign-in — www.epicgames.com). This way the user sees where they are and the window does not look like phishing.
+3. The **initialization script** does the following:
+   - Runs only in the top frame (`window.top === window`).
+   - Looks for the condition `location.origin === 'https://www.epicgames.com'` and `location.pathname === '/id/api/redirect'`.
+   - After `DOMContentLoaded`, parses `document.body.innerText` as JSON.
+   - If `authorizationCode` is filled, does `location.replace('https://hangar.invalid/callback?code=' + encodeURIComponent(code))`. If empty, does nothing.
+4. The **`on_navigation`** handler behaves as follows:
+   - When `hangar.invalid` arrives, it cancels the navigation (`false`), parses the code and passes it to the command through a `oneshot` channel, then closes the window.
+   - **Allowlist:** for other navigations only `https` and allowed domains are permitted: `epicgames.com` and subdomains, plus the captcha and identity-provider domains observed in E0 (e.g. hCaptcha/Arkose, Google, Apple, Xbox/Microsoft, Steam, PlayStation, Nintendo, Facebook). The list is a single constant array in the code.
+5. **`on_new_window`:** popups are opened in the same window (subject to the allowlist) or blocked. E0 decides which: if signing in with identity providers like Google or Apple wants a popup, it opens in the same window.
+6. **The window's `Destroyed` event:** if the channel is still empty, the command returns with "cancelled". No warning is shown to the user.
+7. **Timeout:** if no code arrives within 5 minutes, the window closes and the command returns with "Giriş zaman aşımına uğradı" (Sign-in timed out).
 
-Uzak sayfa için **hiçbir capability tanımlanmaz**. `capabilities/default.json` yalnızca `main` penceresine uygulanmaya devam eder.
+**No capability is defined** for the remote page. `capabilities/default.json` continues to apply only to the `main` window.
 
-Yetki kodu tek kullanımlıktır ve kısa ömürlüdür. Yalnızca bu yönlendirme sırasında bellekte bulunur. İptal edilen gezinme olduğu için pencere geçmişine girmez; pencere de zaten InPrivate.
+The authorization code is single-use and short-lived. It exists in memory only during this redirect. Since the navigation is cancelled, it does not enter the window history; the window is InPrivate anyway.
 
-Aynı anda tek bir giriş penceresi açık olabilir. Zaten açıksa öne getirilir.
+Only one sign-in window can be open at a time. If it is already open, it is brought to the front.
 
-### 2. Epic servisleri
+### 2. Epic services
 
-**Giriş adresi:**
+**Sign-in address:**
 `https://www.epicgames.com/id/login?redirectUrl=https%3A%2F%2Fwww.epicgames.com%2Fid%2Fapi%2Fredirect%3FclientId%3D34a02cf8f4414e29b15921876da36f9a%26responseType%3Dcode`
 
-**Belge alma** (Epic Games Launcher'ın herkese açık istemcisi; Legendary, Heroic ve Playnite de bunu kullanıyor):
+**Getting the token** (the public client of the Epic Games Launcher; Legendary, Heroic and Playnite use it too):
 - `POST https://account-public-service-prod03.ol.epicgames.com/account/api/oauth/token`
-- Basic auth: `34a02cf8f4414e29b15921876da36f9a:daafbccc737745039dffe53d94fc76cf` (kodda sabit; zaten herkese açık)
-- Form: `grant_type=authorization_code&code=<kod>&token_type=eg1`
-- Kullanılan alanlar: `access_token`, `expires_at`, `refresh_token`, `refresh_expires_at`, `account_id`, `displayName`.
-- Yenileme: aynı uç, `grant_type=refresh_token&refresh_token=<…>&token_type=eg1`.
+- Basic auth: `34a02cf8f4414e29b15921876da36f9a:daafbccc737745039dffe53d94fc76cf` (hard-coded; it is already public)
+- Form: `grant_type=authorization_code&code=<code>&token_type=eg1`
+- Fields used: `access_token`, `expires_at`, `refresh_token`, `refresh_expires_at`, `account_id`, `displayName`.
+- Refresh: the same endpoint, `grant_type=refresh_token&refresh_token=<…>&token_type=eg1`.
 
-**Sahip olunan oyunlar:**
+**Owned games:**
 - `GET https://library-service.live.use1a.on.epicgames.com/library/api/public/items?includeMetadata=true[&cursor=<…>]`, `Authorization: bearer <access_token>`.
-  - `responseMetadata.nextCursor` bitene kadar sayfalanır.
-  - Her kayıttan `namespace`, `catalogItemId` ve `appName` alınır.
-  - `namespace == "ue"` olan kayıtlar (Unreal Engine varlıkları) atlanır.
-- Katalog: `GET https://catalog-public-service-prod06.ol.epicgames.com/catalog/api/shared/namespace/<ns>/bulk/items?id=<id>[,<id>…]&includeDLCDetails=true&includeMainGameDetails=true&country=US&locale=en-US`. Yanıt `catalogItemId`'ye göre anahtarlanır.
-  - Aynı namespace'teki kimlikler tek çağrıda istenir.
-  - **Hız sınırı:** çağrılar arasında en az 100 ms beklenir.
-- **Filtre** (kesin kurallar E0 fixture'larıyla sabitlenir):
-  - `mainGameItem` varsa (DLC) kayıt atlanır.
-  - `categories` `addons` ya da `digitalextras` içeriyorsa kayıt atlanır.
-  - `categories` `applications` içerip `games` içermiyorsa kayıt atlanır.
-- **Katalog önbelleği:** `catalogItemId` başına başlık ve "oyun mu" bilgisi SQLite'ta tutulur. Sonraki taramalarda yalnızca yeni kimlikler için katalog çağrılır.
+  - Paged until `responseMetadata.nextCursor` runs out.
+  - `namespace`, `catalogItemId` and `appName` are taken from each record.
+  - Records with `namespace == "ue"` (Unreal Engine assets) are skipped.
+- Catalog: `GET https://catalog-public-service-prod06.ol.epicgames.com/catalog/api/shared/namespace/<ns>/bulk/items?id=<id>[,<id>…]&includeDLCDetails=true&includeMainGameDetails=true&country=US&locale=en-US`. The response is keyed by `catalogItemId`.
+  - IDs in the same namespace are requested in a single call.
+  - **Rate limit:** at least 100 ms is waited between calls.
+- **Filter** (exact rules are pinned with E0 fixtures):
+  - If `mainGameItem` exists (DLC), the record is skipped.
+  - If `categories` contains `addons` or `digitalextras`, the record is skipped.
+  - If `categories` contains `applications` but not `games`, the record is skipped.
+- **Catalog cache:** the title and "is it a game" information per `catalogItemId` are kept in SQLite. In later scans the catalog is called only for new IDs.
 
-**Kayıt biçimi** (kurulu manifestle aynı kimlik, böylece birleşir):
-- `platform: Epic`, `platform_id: appName`, `title: katalog başlığı`, `installed: false`
+**Record format** (same identity as the installed manifest, so they merge):
+- `platform: Epic`, `platform_id: appName`, `title: catalog title`, `installed: false`
 - `launch_uri`: `com.epicgames.launcher://apps/<ns>%3A<catalogItemId>%3A<appName>?action=launch&silent=true`
 - `install_uri`: `com.epicgames.launcher://apps/<ns>%3A<catalogItemId>%3A<appName>?action=install`
 
-**Kurulu kayıtla birleşme:**
-- Kurulu kayıt kazanır.
-- Başlık manifestteki `DisplayName` olarak kalır; böylece normalleştirilmiş ad ve birleştirme/ayırma kayıtları bozulmaz.
-- Kurulu kaydın `install_uri`'si, sahip olunan kaydın `action=install` bağlantısıyla güncellenir.
+**Merging with the installed record:**
+- The installed record wins.
+- The title stays as the manifest's `DisplayName`; this way the normalized name and the merge/split records are not broken.
+- The installed record's `install_uri` is updated with the owned record's `action=install` link.
 
-**"Kur" ve launcher:**
-- Bağlantı `opener` ile açılır.
-- Epic launcher kapalıysa Windows onu başlatır.
-- Bağlantı açılamazsa (launcher kurulu değil) mevcut başlatma hata yolu "Epic Games Launcher açılamadı — kurulu mu?" mesajını gösterir.
+**"Kur" and the launcher:**
+- The link is opened with `opener`.
+- If the Epic launcher is closed, Windows starts it.
+- If the link cannot be opened (launcher not installed), the existing launch error path shows the message "Epic Games Launcher açılamadı — kurulu mu?" (Could not open Epic Games Launcher — is it installed?).
 
-**Bağlantıyı kes:**
-1. Önce geçerli bir access token alınır (gerekirse yenilenir).
-2. `DELETE https://account-public-service-prod03.ol.epicgames.com/account/api/oauth/sessions/kill/<access_token>` çağrılır. Başarısız olursa bu önemsenmez, ama sonuç arayüzde söylenir ("Epic'teki oturum kapatılamadı; Epic hesap ayarlarından kapatabilirsin").
-3. Ardından `epic.dat`, sahip olunan liste önbelleği ve "süresi doldu" durumu silinir.
-4. Yeniden tarama yapılır; kurulu oyunlar yerinde kalır.
+**Disconnecting:**
+1. First a valid access token is obtained (renewed if necessary).
+2. `DELETE https://account-public-service-prod03.ol.epicgames.com/account/api/oauth/sessions/kill/<access_token>` is called. If it fails this is ignored, but the result is stated in the UI ("Epic'teki oturum kapatılamadı; Epic hesap ayarlarından kapatabilirsin") (Could not end the session on Epic; you can end it from your Epic account settings).
+3. Then `epic.dat`, the owned list cache and the "expired" state are deleted.
+4. A rescan is done; installed games stay in place.
 
-### 3. Belge deposu
+### 3. Token store
 
-- `hangar-core` bir trait tanımlar: `SecretStore` (`load`, `save` ve `delete`, platform başına). Testlerde bellek içi sahte kullanılır.
-- **Windows uygulaması:**
-  - `CryptProtectData` / `CryptUnprotectData` kullanılır, CurrentUser kapsamında, sabit ek entropi `b"hangar-accounts-v1"` ile.
-  - Şifreli bayt dizisi `%APPDATA%\com.hangar.app\accounts\<platform>.dat` dosyasına yazılır.
-  - Yazma geçici dosya + yeniden adlandırma ile yapılır.
-- Şifrelemeden önceki içerik küçük bir JSON'dur: `refresh_token`, `refresh_expires_at`, `account_id`, `display_name`.
-- Kısa ömürlü `access_token` yalnızca bellekte tutulur.
-- Belge metinleri kullanımdan sonra bellekte sıfırlanır (`zeroize` ya da elle). Bunu ucuzsa yapmak yeterli; aynı kullanıcıdaki zararlı yazılıma karşı tam koruma değildir.
-- **Yenileme sırası:** yenileme tek bir `Mutex` arkasında sıralanır. Yeni `refresh_token` gelir gelmez, bu belge **başka bir istek için kullanılmadan önce** `save` ile diske yazılır; böylece çökme durumunda dönmüş bir belge kaybolmaz.
-- Dosya çözülemiyorsa (başka Windows kullanıcısı ya da bozuk dosya) silinir ve platform "Bağlı değil" sayılır. Uyarı satırında "Epic bağlantısı okunamadı; yeniden bağlan" yazar.
+- `hangar-core` defines a trait: `SecretStore` (`load`, `save` and `delete`, per platform). An in-memory fake is used in tests.
+- **Windows implementation:**
+  - `CryptProtectData` / `CryptUnprotectData` are used, with CurrentUser scope and a fixed extra entropy `b"hangar-accounts-v1"`.
+  - The encrypted byte array is written to `%APPDATA%\com.hangar.app\accounts\<platform>.dat`.
+  - Writing is done with a temp file + rename.
+- The content before encryption is a small JSON: `refresh_token`, `refresh_expires_at`, `account_id`, `display_name`.
+- The short-lived `access_token` is kept only in memory.
+- Token strings are zeroed in memory after use (`zeroize` or by hand). It is enough to do this if cheap; it is not full protection against malware under the same user.
+- **Refresh order:** refreshing is serialized behind a single `Mutex`. As soon as a new `refresh_token` arrives, this token is written to disk with `save` **before being used for another request**; this way a rotated token is not lost in a crash.
+- If the file cannot be decrypted (another Windows user or a corrupt file), it is deleted and the platform counts as "Bağlı değil". The warning row says "Epic bağlantısı okunamadı; yeniden bağlan" (Epic connection could not be read; reconnect).
 
-### 4. Tarama ile birleşme
+### 4. Merging with the scan
 
-- `scan` sırasında Epic bağlıysa ağ işi DB kilidi tutulmadan yapılır (bugünkü Steam deseni gibi).
-- `scan_all`'un `owned` parametresi platformdan bağımsız hale gelir. Birden fazla platformun sahip olunan listesini alır ve her birini kendi platformunun kurulu kayıtlarıyla `platform_id` üzerinden birleştirir. Steam'in mevcut davranışı ve testleri aynen korunur.
-- **Sahip olunan liste önbelleği:** her başarılı alımdan sonra Epic'in sahip olunan listesi SQLite'ta saklanır. Önbellekte yalnızca oyun kayıtları bulunur, belge bulunmaz. Alım başarısız olursa önbellekteki liste kullanılır ve bir uyarı eklenir:
-  - Ağ hatası: "Epic oyunları güncellenemedi; son bilinen liste gösteriliyor."
-  - Belge geçersiz (`invalid_grant` vb.): "Epic bağlantısının süresi doldu: Ayarlar › Hesaplar'dan yeniden bağlan." Platform "Süresi doldu" olarak işaretlenir. Bu durum `settings` tablosunda yalnızca bir durum değeri olarak tutulur, belge değil. Yeniden bağlanınca sıfırlanır.
-- `get_accounts` ağa çıkmaz; dosyanın varlığı ile saklı durum değerine bakar.
-- **İlk tarama:** 100'den fazla katalog çağrısı nedeniyle yavaş olabilir. Bağlantıdan hemen sonraki taramada üstteki uyarı satırında "Epic oyunları yükleniyor…" görünür. Bunun için tarama başlarken ve bitince birer olay yeterli; ayrıntılı ilerleme çubuğu yapılmaz.
+- During `scan`, if Epic is connected, the network work is done without holding the DB lock (like today's Steam pattern).
+- The `owned` parameter of `scan_all` becomes platform-independent. It takes the owned lists of multiple platforms and merges each with its own platform's installed records by `platform_id`. Steam's existing behavior and tests are preserved exactly.
+- **Owned list cache:** after each successful fetch, Epic's owned list is stored in SQLite. The cache contains only game records, no tokens. If a fetch fails, the cached list is used and a warning is added:
+  - Network error: "Epic oyunları güncellenemedi; son bilinen liste gösteriliyor." (Epic games could not be updated; showing the last known list.)
+  - Invalid token (`invalid_grant` etc.): "Epic bağlantısının süresi doldu: Ayarlar › Hesaplar'dan yeniden bağlan." (The Epic connection has expired: reconnect from Settings › Hesaplar.) The platform is marked "Süresi doldu". This is kept in the `settings` table only as a state value, not a token. It is reset on reconnect.
+- `get_accounts` does not go to the network; it looks at the file's existence and the stored state value.
+- **First scan:** may be slow because of 100+ catalog calls. In the scan right after connecting, "Epic oyunları yükleniyor…" (Loading Epic games…) appears in the top warning row. One event at scan start and one at the end is enough for this; no detailed progress bar is built.
 
-### 5. Arayüz — Ayarlar › Hesaplar
+### 5. UI — Settings › Hesaplar
 
-Mevcut Ayarlar penceresine, Steam alanlarının altına bir bölüm eklenir:
+A section is added to the existing Settings window, below the Steam fields:
 
 ```
 Hesaplar
@@ -209,80 +209,80 @@ Hesaplar
   Bağlantı belgesi yalnızca bu bilgisayarda, şifreli tutulur.
 ```
 
-- **Bağlan:**
-  - `connect_account` çağrılır.
-  - Düğme "Epic penceresi açık…" bekleme durumuna geçer.
-  - Dönüşte durum güncellenir ve App'in `rescan`'i çağrılır, böylece uyarılar üstteki satırda görünür (Ayarlar'daki mevcut düzeltmeyle aynı yol).
-  - Zaman aşımı ve diğer hatalar düğmenin altında kısa bir metin olarak görünür.
-- **Bağlantıyı kes:**
-  - Onay sorulur: "Epic bağlantısı silinecek ve Epic'teki oturum kapatılacak; kurulu oyunlar kalır."
-  - Onaydan sonra `disconnect_account` ve `rescan` çağrılır.
-- **Süresi doldu:** düğme "Yeniden bağlan" olur.
-- **Komutlar:** `get_accounts() -> [{platform, state, display_name?}]`, `connect_account(platform)`, `disconnect_account(platform)`.
-- Görsel dil mevcut Ayarlar penceresini izler.
+- **Connect:**
+  - `connect_account` is called.
+  - The button goes to a waiting state "Epic penceresi açık…" (Epic window is open…).
+  - On return the state is updated and App's `rescan` is called, so warnings appear in the top row (same path as the existing fix in Settings).
+  - Timeout and other errors appear as a short text under the button.
+- **Disconnect:**
+  - A confirmation is asked: "Epic bağlantısı silinecek ve Epic'teki oturum kapatılacak; kurulu oyunlar kalır." (The Epic connection will be deleted and the session on Epic will be ended; installed games stay.)
+  - After confirmation `disconnect_account` and `rescan` are called.
+- **Expired:** the button becomes "Yeniden bağlan" (Reconnect).
+- **Commands:** `get_accounts() -> [{platform, state, display_name?}]`, `connect_account(platform)`, `disconnect_account(platform)`.
+- The visual language follows the existing Settings window.
 
-### 6. Hata ve durum metinleri
+### 6. Error and status texts
 
-Bütün metinler kısa ve Türkçedir. Hiçbiri belge, kod ya da yanıt gövdesi içermez. Kesin metinler kurucuya bırakılır; yukarıdakiler yönü gösterir.
+All texts are short and in Turkish. None contains a token, code or response body. The exact texts are left to the builder; the ones above show the direction.
 
-### 7. Güvenlik ve README
+### 7. Security and README
 
-README'ye "Hesap bağlantıları" bölümü eklenir. İçeriği:
+A "Account connections" section is added to the README. Its content:
 
-- **Ne saklanıyor ve nerede:** yalnızca yenileme belgesi ve görünen ad, `%APPDATA%\com.hangar.app\accounts\` altında. Windows DPAPI ile korunur; yalnızca bu Windows kullanıcısı çözebilir.
-- **Nasıl silinir:** "Bağlantıyı kes" hem dosyayı siler hem Epic'teki oturumu kapatır. Elle de klasör silinebilir.
-- **Epic'te nasıl görünür:** Hangar, Epic Games Launcher'ın herkese açık istemci kimliğini kullanır. Bu yüzden Epic hesap ayarlarındaki oturum ve uygulama listelerinde bağlantı **"Epic Games Launcher"** olarak görünür, "Hangar" olarak değil.
-- **Riskler, açıkça:**
-  - Bunlar resmi olmayan uçlar. Epic bu istemci kimliğini engelleyebilir ya da yanıt biçimini değiştirebilir; o zaman Epic'in kurulu olmayan oyunları gelmez, kurulu olanlar çalışmaya devam eder.
-  - Başka bir istemcinin kimliğini kullanmak Epic'in kullanım koşullarına aykırı sayılabilir. En kötü durumda hesap işaretlenebilir. Legendary, Heroic ve Playnite yıllardır aynı yolu kullanıyor ve bilinen yaygın bir yaptırım yok, ama bu bir garanti değil.
-  - Belge hesabın tamamına erişim verir. DPAPI, aynı Windows kullanıcısıyla çalışan zararlı yazılıma karşı koruma sağlamaz.
-- **Sunucu yok:** Hangar'ın sunucusu yok; veri yalnızca Epic'in servislerine gider.
-- **Kalıcı belge istemeyenler için:** işi bitince "Bağlantıyı kes" yeterli. Sahip olunan liste önbellekte kalmaz, kesince silinir.
+- **What is stored and where:** only the refresh token and display name, under `%APPDATA%\com.hangar.app\accounts\`. Protected with Windows DPAPI; only this Windows user can decrypt it.
+- **How to delete:** "Bağlantıyı kes" both deletes the file and ends the session on Epic. The folder can also be deleted by hand.
+- **How it appears on Epic:** Hangar uses the public client ID of the Epic Games Launcher. So in the session and app lists in Epic account settings the connection appears as **"Epic Games Launcher"**, not as "Hangar".
+- **Risks, stated openly:**
+  - These are unofficial endpoints. Epic may block this client ID or change the response format; then Epic's uninstalled games do not arrive, installed ones keep working.
+  - Using another client's ID may be considered a violation of Epic's terms of use. In the worst case the account may be flagged. Legendary, Heroic and Playnite have used the same path for years and there is no known widespread enforcement, but this is not a guarantee.
+  - The token gives access to the whole account. DPAPI does not protect against malware running as the same Windows user.
+- **No server:** Hangar has no server; data goes only to Epic's services.
+- **For those who do not want a persistent token:** "Bağlantıyı kes" when done is enough. The owned list does not stay in the cache; it is deleted on disconnect.
 
-## Test ve doğrulama
+## Tests and verification
 
-**`hangar-core` (Linux'ta):**
-- Token yanıtı ayrıştırma; kütüphane sayfalaması; katalog filtreleme (DLC, eklenti, `ue`, applications); kayıt üretimi.
-- Kurulu kayıtla birleşme: başlık manifestten gelir, `install_uri` güncellenir.
-- `scan_all` genellemesi: Steam testleri değişmeden geçer.
-- Önbellekten geri dönüş ve uyarı metinleri.
-- `invalid_grant` gelince "süresi doldu" işaretlenir.
-- Yeni `refresh_token`, kullanılmadan önce `save` edilir (sahte depo ile sıra testi).
-- Bozuk ya da çözülemeyen depo "Bağlı değil" sonucunu verir.
-- **Belge sızıntısı testi:** sahte belge değerleri hiçbir hata mesajında, uyarıda ya da DB satırında geçmez.
-- Ağ katmanı trait arkasındadır ve E0 fixture'larıyla beslenir.
+**`hangar-core` (on Linux):**
+- Token response parsing; library paging; catalog filtering (DLC, add-on, `ue`, applications); record generation.
+- Merging with the installed record: the title comes from the manifest, `install_uri` is updated.
+- The `scan_all` generalization: Steam tests pass unchanged.
+- Fallback to the cache and warning texts.
+- When `invalid_grant` arrives, "expired" is marked.
+- The new `refresh_token` is `save`d before being used (order test with a fake store).
+- A corrupt or undecryptable store gives the "Bağlı değil" result.
+- **Token leak test:** fake token values appear in no error message, warning or DB row.
+- The network layer is behind a trait and is fed with E0 fixtures.
 
 **`src-tauri`:**
 - `cargo check`.
-- `cfg(windows)` altında DPAPI gidiş-dönüş testi ile bozuk blob testi.
-- Yakalama adresi ayrıştırma ve izin listesi eşleştirmesi saf fonksiyonlar olarak birim testli olur.
+- Under `cfg(windows)` a DPAPI round-trip test and a corrupt-blob test.
+- Capture address parsing and allowlist matching are unit-tested as pure functions.
 
-**Ön yüz (vitest, mevcut `SettingsDialog.test.tsx` deseniyle):** Hesaplar bölümünün durumları, düğmeleri, onay sorusu ve hata metinleri.
+**Front end (vitest, with the existing `SettingsDialog.test.tsx` pattern):** the states, buttons, confirmation question and error texts of the Hesaplar section.
 
-**Elle (Windows, `npm run tauri dev`):**
-1. Epic'e bağlan; pencere başlığı adresi gösteriyor; giriş sonrası pencere kapanıyor.
-2. "Epic oyunları yükleniyor…" görünüyor, sonra kurulu olmayan Epic oyunları geliyor.
-3. Death's Door hâlâ tek kart.
-4. Uygulamayı yeniden aç; giriş istenmiyor.
-5. Bir oyunda "Kur" Epic launcher'da kurulumu açıyor.
-6. Wi-Fi kapalı tarama: son bilinen liste ve uyarı.
-7. "Bağlantıyı kes": yalnızca kurulu oyunlar kalıyor, `accounts\epic.dat` silinmiş, Epic hesap sayfasında oturum kapanmış.
-8. WebView2 veri klasöründe Epic çerezi yok.
+**By hand (Windows, `npm run tauri dev`):**
+1. Connect to Epic; the window title shows the address; the window closes after sign-in.
+2. "Epic oyunları yükleniyor…" appears, then the uninstalled Epic games arrive.
+3. Death's Door is still a single card.
+4. Reopen the app; no sign-in is asked.
+5. "Kur" on a game opens the install in the Epic launcher.
+6. Scan with Wi-Fi off: the last known list and the warning.
+7. "Bağlantıyı kes": only installed games remain, `accounts\epic.dat` is deleted, the session is ended on the Epic account page.
+8. No Epic cookie in the WebView2 data folder.
 
-## Sonraki iş: Ubisoft (bu planın dışında)
+## Next work: Ubisoft (outside this plan)
 
-- Ubisoft'un yerel önbelleği bu PC'de şifreli (`cache\configuration\configurations.vdat`, `cache\ownership\<id>`), bu yüzden yalnızca web yolu kaldı.
-- **U0 (süresi sınırlı, kullanıcının gerçek girişiyle)** şunları gösterecek:
-  1. connect.ubisoft.com girişi ve ticket'ın nereden okunacağı (`ticket`, `sessionId`, `userId`, `rememberMeTicket`).
-  2. `rm_v1` ile yenileme (`POST https://public-ubiservices.ubi.com/v3/profiles/sessions`).
-  3. Sahip olunan oyunlar ve kayıt defteriyle eşleşen ürün kimliği.
-  4. Kurulumu açan `uplay://` bağlantısı.
-- U0 başarılı olursa, bu belgedeki ortak altyapı (giriş penceresi, `SecretStore`, `scan_all` haritası, Hesaplar listesi) üzerine ayrı, kısa bir plan yazılır. Başarısız olursa Ubisoft'ta yalnızca kurulu oyunlar kalır.
+- Ubisoft's local cache is encrypted on this PC (`cache\configuration\configurations.vdat`, `cache\ownership\<id>`), so only the web path remains.
+- **U0 (time-boxed, with the user's real sign-in)** will show:
+  1. The connect.ubisoft.com sign-in and where the ticket is read from (`ticket`, `sessionId`, `userId`, `rememberMeTicket`).
+  2. Renewal with `rm_v1` (`POST https://public-ubiservices.ubi.com/v3/profiles/sessions`).
+  3. Owned games and the product ID that matches the registry.
+  4. The `uplay://` link that opens the install.
+- If U0 succeeds, a separate short plan is written on top of the shared infrastructure in this document (sign-in window, `SecretStore`, the `scan_all` map, the Hesaplar list). If it fails, only installed games remain for Ubisoft.
 
-## Kurucuya bırakılanlar
+## Left to the builder
 
-- Modül ve dosya adları (ör. `providers/epic_account.rs`), trait şekilleri, yeni SQLite tablolarının adları ve şeması.
-- `oneshot` kanalının ve pencere durumunun nasıl tutulacağı.
-- İzin listesindeki kesin alan adları (E0 gözlemine göre).
-- Yükleniyor olayının adı ve biçimi.
-- Hata metinlerinin kesin hali.
+- Module and file names (e.g. `providers/epic_account.rs`), trait shapes, the names and schema of the new SQLite tables.
+- How the `oneshot` channel and the window state are held.
+- The exact domain names in the allowlist (per E0 observation).
+- The name and format of the loading event.
+- The exact wording of the error texts.

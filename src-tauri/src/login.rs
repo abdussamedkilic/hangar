@@ -1,5 +1,5 @@
-//! Epic giriş penceresi: ince Tauri yapıştırıcısı. Kurallar `hangar_core::accounts::login`'de.
-//! Kodu, token'ları ya da sorgulu URL'leri asla loglamaz.
+//! Epic login window: thin Tauri glue. The rules live in `hangar_core::accounts::login`.
+//! Never logs the code, tokens or URLs with query strings.
 
 use hangar_core::accounts::epic_api::LOGIN_URL;
 use hangar_core::accounts::login::{decide_with, init_script, new_nonce, window_title, NavDecision, NAV_RULES};
@@ -31,8 +31,8 @@ impl std::fmt::Display for LoginError {
     }
 }
 
-/// Yetki kodu ile gezinilen (yalnızca host) izinli/engelli hostlar.
-#[cfg_attr(not(debug_assertions), allow(dead_code))] // host listeleri yalnızca debug probe okur
+/// Allowed/blocked hosts visited with the auth code (host only).
+#[cfg_attr(not(debug_assertions), allow(dead_code))] // the host lists are read only by the debug probe
 pub struct LoginOutcome {
     pub code: String,
     pub allowed_hosts: BTreeSet<String>,
@@ -47,7 +47,7 @@ pub async fn login_with_hosts(app: &AppHandle) -> Result<LoginOutcome, LoginErro
     login_flow(app, LOGIN_URL.to_string(), NAV_RULES, init_script, window_title).await
 }
 
-/// Üretim Ubisoft girişi: sağlayıcıya özgü adres, kurallar, betik ve başlık.
+/// Production Ubisoft login: provider-specific URL, rules, script and title.
 pub async fn login_ubisoft(app: &AppHandle) -> Result<String, LoginError> {
     use hangar_core::accounts::login::{ubi_init_script, ubi_login_url, ubi_window_title, UBI_NAV_RULES};
     login_flow(app, ubi_login_url(), UBI_NAV_RULES, ubi_init_script, ubi_window_title)
@@ -55,7 +55,7 @@ pub async fn login_ubisoft(app: &AppHandle) -> Result<String, LoginError> {
         .map(|o| o.code)
 }
 
-/// Açık giriş/Steam penceresini kapatır (varsa).
+/// Closes the open login/Steam window (if any).
 pub fn close_login_window(app: &AppHandle, label: &str) {
     if let Some(w) = app.get_webview_window(label) {
         let _ = w.close();
@@ -64,7 +64,7 @@ pub fn close_login_window(app: &AppHandle, label: &str) {
 
 type Rules = &'static [(&'static str, bool, &'static [&'static str])];
 
-/// Sağlayıcıdan bağımsız giriş akışı: adres, gezinme kuralları, nonce'lu betik ve başlık sağlayıcıya özgü.
+/// Provider-independent login flow: the URL, navigation rules, nonce'd script and title are provider-specific.
 pub async fn login_flow(
     app: &AppHandle,
     url: String,
@@ -75,12 +75,12 @@ pub async fn login_flow(
     login_flow_with(app, url, rules, script, title, FlowOpts::default()).await
 }
 
-/// İsteğe bağlı: kalıcı WebView2 veri klasörü (verilirse incognito değil) ve gizli pencere.
+/// Optional: persistent WebView2 data folder (not incognito when given) and hidden window.
 #[derive(Default)]
 pub struct FlowOpts {
     pub data_dir: Option<std::path::PathBuf>,
     pub hidden: bool,
-    /// Pencere etiketi; `None` -> `LABEL`. Steam kendi etiketini kullanır, kullanıcı girişleriyle çakışmaz.
+    /// Window label; `None` -> `LABEL`. Steam uses its own label so it does not clash with user logins.
     pub label: Option<&'static str>,
 }
 
@@ -97,11 +97,11 @@ pub async fn login_flow_with(
         if w.is_visible().unwrap_or(true) {
             let _ = w.set_focus();
         } else if label == STEAM_LABEL {
-            let _ = w.close(); // gizli Steam alımı kullanıcıyı engellemesin
+            let _ = w.close(); // so a hidden Steam fetch does not block the user
         }
         return Err(LoginError::AlreadyOpen);
     }
-    // Her deneme için tek nonce; betik ve her decide çağrısı aynı değeri kullanır.
+    // One nonce per attempt; the script and every decide call use the same value.
     let nonce = new_nonce();
     let (tx, rx) = mpsc::channel::<Result<String, LoginError>>();
     let tx_nav = tx.clone();
@@ -122,8 +122,8 @@ pub async fn login_flow_with(
         .on_navigation(move |url| {
             let host = url.host_str().unwrap_or("").to_string();
             match decide_with(url, &nonce_nav, rules) {
-                // Geri dönüş yalnızca bu pencere açıkken kabul edilir; ilk mesaj kazanır
-                // (alıcı ilk mesajdan sonra okunmaz, sonraki gönderimler yok sayılır).
+                // The callback is accepted only while this window is open; the first message wins
+                // (the receiver is not read after the first message; later sends are ignored).
                 NavDecision::Callback(c) => {
                     let _ = tx_nav.send(Ok(c));
                     false
@@ -142,7 +142,7 @@ pub async fn login_flow_with(
                 }
                 NavDecision::Block => {
                     if let Ok(mut s) = blocked_nav.lock() {
-                        s.insert(format!("{host}{}", url.path())); // yol (sorgusuz) tanı için
+                        s.insert(format!("{host}{}", url.path())); // path (no query) for diagnostics
                     }
                     false
                 }
@@ -198,7 +198,7 @@ impl Drop for KillOnDrop<'_> {
     }
 }
 
-/// E0 keşfi: gerçek girişle yanıt şekillerini temizlenmiş olarak <app_data>/e0 altına yazar.
+/// E0 discovery: with a real login, writes sanitized response shapes under <app_data>/e0.
 #[cfg(debug_assertions)]
 #[tauri::command]
 pub async fn debug_epic_probe(app: AppHandle) -> Result<String, String> {
@@ -276,7 +276,7 @@ pub async fn debug_epic_probe(app: AppHandle) -> Result<String, String> {
     ))
 }
 
-/// U0 keşfi (Ubisoft): giriş → sahip olunan oyunlar, `Game` alanları, yenileme durumu, yerel önbellek dosya adları.
+/// U0 discovery (Ubisoft): login -> owned games, `Game` fields, refresh status, local cache file names.
 #[cfg(debug_assertions)]
 #[tauri::command]
 pub async fn debug_ubisoft_probe(app: AppHandle) -> Result<String, String> {
